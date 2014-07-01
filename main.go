@@ -4,47 +4,46 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"regexp"
 )
 
-type BoxesType struct {
-	Active bool
-	Ips    map[string][]string
-}
-
 type Statistics struct {
-	Alive     bool
-	Boxes     map[string]BoxesType
-	Fs        int
-	Ips_free  int
-	La        map[string]float32
-	Last_seen int64
-	Now       int64
-	Oom       []string
-	Ram       map[string]int
-	Score     float32
-	Stale     bool
+	Alive bool `json:"alive"`
+	Boxes map[string]struct {
+		Active bool                `json:"active"`
+		Ips    map[string][]string `json:"ips"`
+	} `json:"boxes"`
+	Fs        int                `json:"fs"`
+	Ips_free  int                `json:"ips_free"`
+	La        map[string]float32 `json:"la"`
+	Last_seen int64              `json:"last_seen"`
+	Now       float64            `json:"now"`
+	Oom       []string           `json:"oom"`
+	Ram       map[string]int     `json:"ram"`
+	Score     float32            `json:"score"`
+	Stale     bool               `json:"stale"`
 }
 
 var hosts = make(map[string]*Statistics)
 
 func statsJson(w http.ResponseWriter, r *http.Request) {
-	json, _ := json.Marshal(hosts)
-	fmt.Fprintf(w, "%s", json)
+	stats, _ := json.Marshal(hosts)
+	fmt.Fprintf(w, "%s", stats)
 }
 
 func hostManagement(w http.ResponseWriter, r *http.Request) {
 	var restQuery = regexp.MustCompile(`^/h/([A-Za-z0-9_-]*)[/]?([A-Za-z0-9_-]*)$`).
 		FindStringSubmatch(r.URL.Path)
-	host := restQuery[1]
+	hostname := restQuery[1]
 	command := restQuery[2]
 
-	if host == "" {
+	if hostname == "" {
 		http.Error(w, "300 Multiple Choices", 300)
-		json, _ := json.Marshal(hosts)
-		fmt.Fprintf(w, "%s", json)
+		stats, _ := json.Marshal(hosts)
+		fmt.Fprintf(w, "%s", stats)
 		return
 	}
 
@@ -62,7 +61,21 @@ func hostManagement(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == "PUT" {
-		http.Error(w, "501 Not Implemented", 501)
+		rawdata, err := ioutil.ReadAll(r.Body)
+
+		//TODO if rawdata is empty, send 400 code
+
+		if err != nil {
+			http.Error(w, "Error while reading request body", 500)
+			fmt.Fprintf(w, "%s", err)
+			return
+		}
+
+		var hostdata = Statistics{}
+		json.Unmarshal(rawdata, &hostdata)
+		hosts[hostname] = &hostdata
+
+		http.Error(w, "201 Created", 201)
 		return
 	}
 
