@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"io/ioutil"
+	"syscall"
 	"strings"
 	"strconv"
 	"math"
@@ -27,7 +28,7 @@ type Resources struct {
 	// total disk space
 	disk_capacity int
 
-	ram uint32
+	ram int
 	// total memory available
 	ram_capacity int
 
@@ -41,22 +42,22 @@ type Resources struct {
 	// system reservation of disk
 	DISK_MIN int
 	// system reservation of memory
-	MEM_MIN uint64
+	MEM_MIN int
 
 
-	control_op_time uint32
+	control_op_time int
 	OP_TIME_THRESHOLD int
 	SLOWNESS int
 
-	uptime uint32
+	uptime int
 	UPTIME_PERIOD int
 
 	// weight section
-	cpu_weight float32
-	disk_weight  float32
-	ram_weight float32
-	speed_factor float32
-	uptime_factor float32
+	cpu_weight float64
+	disk_weight  float64
+	ram_weight float64
+	speed_factor float64
+	uptime_factor float64
 }
 
 // raw function for obtaining ram capacity
@@ -76,7 +77,27 @@ func get_ram_capacity() int {
 		os.Exit(1)
 	}
 	return result
+}
 
+
+// raw function for obtaining ram capacity
+// copy-pas pattern :(
+func get_ram_free() int {
+	cmd := exec.Command("/usr/bin/free", "-b")
+	out, err := cmd.Output()
+
+	// TODO: make code pretty
+	if err != nil {
+		fmt.Printf("ERROR OCCURED: couldn't determine ram capacity (%v)\n", err)
+		os.Exit(1)
+	}
+
+	result, err := strconv.Atoi(strings.Fields(string(out))[9])
+	if err != nil {
+		fmt.Printf("ERROR OCCURED: couldn't determine ram capacity (%v)\n", err)
+		os.Exit(1)
+	}
+	return result
 }
 
 
@@ -165,6 +186,12 @@ func (res *Resources) Setup() {
 
 	// determine zfs arc max value
 	res.zfs_arc_max = get_zfs_arc_max_value()
+
+	// TODO: determine SLOWNESS
+	res.SLOWNESS = 120
+
+	// 
+	res.OP_TIME_THRESHOLD = 300
 }
 
 
@@ -179,21 +206,31 @@ func get_cpu_lxc_usage() int {
 	return user+system
 }
 
+func GetUptime() int {
+	var info syscall.Sysinfo_t
+	err := syscall.Sysinfo(&info)
+	if err != nil {
+		fmt.Printf("ERROR OCCURED: couldn't determine system uptime (%v)\n", err)
+		os.Exit(1)
+	}
+	return int(info.Uptime)
+}
 
-func (res *Resources) GetLength() float32 {
+
+func (res *Resources) GetLength() float64 {
 	return res.speed_factor * res.uptime_factor * res.cpu_weight * res.disk_weight * res.ram_weight
 }
 
 
 // b-normalization on minimal value
-func min_norm(a,b int) float32 {
+func min_norm(a,b int) float64 {
 	var min int
 	if a < b {
 		min = a
 	} else {
 		min = b
 	}
-	return float32(min) / float32(b)
+	return float64(min) / float64(b)
 }
 
 // take string in input, generate hash, convert it to dec and 
@@ -215,24 +252,40 @@ var res Resources
 
 func RefreshRoutine () {
 	cpu_step1, cpu_step2 := 0, 0
+	ticks := 0
+	
+	// Set startup cpu value is much bigger than maximum to avoid miscalculation
 
 	for {
 		cpu_step1, cpu_step2 = cpu_step2, get_cpu_lxc_usage()
-		// raw: get middle value for cpu usage
-		res.cpu = (cpu_step2 - cpu_step1 + res.cpu) / 2
+
+		if ticks > 0 {
+			res.cpu = (cpu_step2 - cpu_step1 + res.cpu) / 2
+		}
+
+		ticks += 1
+		
 		res.cpu_weight = 1.0 - min_norm(res.cpu, res.cpu_capacity - res.CPU_MIN)
 
 		res.disk = get_disk_free()
 		res.disk_weight = 1.0 - min_norm(int(float32(res.disk_capacity) * 0.1), res.disk)
 		
+		res.ram = get_ram_free()
+		res.ram_weight = 1 - min_norm(res.ram, res.ram_capacity - res.zfs_arc_max - res.MEM_MIN)
 
-		
-		res.ram = 0
+		res.uptime = GetUptime()
+		// TODO: determine control operation time
+		res.control_op_time = 2
 
-		res.uptime = 0
-		res.control_op_time = 0
+		// TODO: determine UPTIME_PERIOD
+		res.UPTIME_PERIOD = 120
 
-		fmt.Printf("Refreshed: %v\n", res)
+		res.uptime_factor = 2 * math.Atan(float64(res.uptime) / float64(res.UPTIME_PERIOD)) / math.Pi
+
+		res.speed_factor = 1 -2 * math.Atan(math.Max(0, float64(res.control_op_time - res.OP_TIME_THRESHOLD)) / float64(res.SLOWNESS))
+
+		fmt.Printf("TICK: %d, Refreshed: %+v\n", ticks, res)
+		fmt.Printf("Length: %v\n", res.GetLength())
 		time.Sleep(time.Second)
 
 	}
@@ -241,7 +294,6 @@ func RefreshRoutine () {
 
 
 func main() {
-	//fmt.Println(Resources{name:"test"})
 	res.Setup()
 	
 	go RefreshRoutine()
