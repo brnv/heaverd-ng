@@ -14,5 +14,6 @@ func GetArcMax() (int, error) {
 	}
 	fmt.Fscanf(fi, "%d", &num)
 	fi.Close()
-	return num
+	// return value in kb
+	return num / 1024, err
 }
