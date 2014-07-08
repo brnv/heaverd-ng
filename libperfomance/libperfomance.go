@@ -66,6 +66,11 @@ type Host struct {
 	length    float64
 }
 
+// segment, where host-server lies
+type Segment struct {
+	X, Y float64
+}
+
 // Generate value that belongs segment [0;1]
 func Hash(input string) float64 {
 	data := []byte(input)
@@ -90,6 +95,28 @@ func MinNorm(a, b int) float64 {
 	return float64(min) / float64(b)
 }
 
+// calculate host segments
+// TODO: make sorting
+func CalculateSegments(input map[string]*Host) map[string]*Segment {
+	Segments := make(map[string]*Segment)
+	sum := 0.0
+	shift := 0.0
+	// get all legnths and summary the segment
+	for name, host := range input {
+		Segments[name] = &Segment{X: 0.0, Y: host.GetLength()}
+		sum += Segments[name].Y
+	}
+
+	for name, seg := range Segments {
+		// let the left point of segment be the right point of previous segment
+		// if it's first segment, shift will be 0
+		Segments[name] = &Segment{X: shift, Y: seg.Y/sum + shift}
+		shift = Segments[name].Y
+	}
+	return Segments
+}
+
+// refresh method takes 1sec to complete operation, for determining current cpu usage
 func (host *Host) Refresh() (err error) {
 	host.Hostname, err = linux.GetHostName()
 	if err != nil {
@@ -142,6 +169,6 @@ func (host *Host) Refresh() (err error) {
 	return
 }
 
-func GetLength(host *Host) float64 {
+func (host *Host) GetLength() float64 {
 	return host.length
 }
