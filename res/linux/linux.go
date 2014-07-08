@@ -52,7 +52,7 @@ func GetCpuTicks() (int, error) {
 		return 0, err
 	}
 
-	return user + system
+	return user + system, err
 }
 
 // obtaining cpu capacity and usage in %
@@ -115,7 +115,7 @@ func GetUptime() (int, error) {
 func GetHostName() (hostname string, err error) {
 	hostname, err = os.Hostname()
 	if err != nil {
-		return 0, err
+		return "", err
 	}
 
 	return
