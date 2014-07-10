@@ -38,10 +38,15 @@ func main() {
 		//	fmt.Printf("%v: Host %v: length: %v\n", i, host.Hostname, host.GetLength())
 		//}
 		Segments := libperfomance.CalculateSegments(Hosts)
-		for i, seg := range Segments {
-			fmt.Printf("%v: segment: %+v\n", i, seg)
+		//for i, seg := range Segments {
+		//	fmt.Printf("%v: segment: %+v\n", i, seg)
+		//}
+		host, err := libperfomance.ChooseHost("testa", Segments)
+		if err != nil {
+			fmt.Printf("Error occured: %v\n", err)
+		} else {
+			fmt.Printf("%v\n", host)
 		}
-		fmt.Printf("\n")
 	}
 
 }
