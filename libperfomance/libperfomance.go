@@ -2,9 +2,12 @@ package libperfomance
 
 import (
 	"crypto/sha1"
+	"fmt"
 	"heaverd-ng/res/linux"
 	"heaverd-ng/res/linux/zfs"
 	"math"
+	"sort"
+	"time"
 )
 
 // Structure of resources of host machine
@@ -71,6 +74,15 @@ type Segment struct {
 	X, Y float64
 }
 
+type PError struct {
+	When time.Time
+	What string
+}
+
+func (e *PError) Error() string {
+	return fmt.Sprintf("[%v], %v", e.When, e.What)
+}
+
 // Generate value that belongs segment [0;1]
 func Hash(input string) float64 {
 	data := []byte(input)
@@ -96,24 +108,41 @@ func MinNorm(a, b int) float64 {
 }
 
 // calculate host segments
-// TODO: make sorting
 func CalculateSegments(input map[string]*Host) map[string]*Segment {
+	slice := make([]string, len(input))
 	Segments := make(map[string]*Segment)
 	sum := 0.0
 	shift := 0.0
+	count := 0
 	// get all legnths and summary the segment
 	for name, host := range input {
 		Segments[name] = &Segment{X: 0.0, Y: host.GetLength()}
 		sum += Segments[name].Y
+		slice[count] = name
+		count += 1
 	}
 
-	for name, seg := range Segments {
+	sort.Strings(slice)
+
+	for i := range slice {
 		// let the left point of segment be the right point of previous segment
 		// if it's first segment, shift will be 0
-		Segments[name] = &Segment{X: shift, Y: seg.Y/sum + shift}
-		shift = Segments[name].Y
+		Segments[slice[i]].X = shift
+		Segments[slice[i]].Y = Segments[slice[i]].Y/sum + shift
+		shift = Segments[slice[i]].Y
 	}
 	return Segments
+}
+
+func ChooseHost(container string, fragmentation map[string]*Segment) (host string, err error) {
+	// get float value which belongs to [0;1]
+	cval := Hash(container)
+	for name, segment := range fragmentation {
+		if cval >= segment.X && cval <= segment.Y {
+			return name, nil
+		}
+	}
+	return "", &PError{time.Now(), fmt.Sprintf("Cannot assign any host to container name %v", container)}
 }
 
 // refresh method takes 1sec to complete operation, for determining current cpu usage
