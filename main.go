@@ -10,9 +10,9 @@ import (
 )
 
 var (
-	hosts        = make(map[string]*Statistics)
-	HOST_RE      = regexp.MustCompile(`^/h/([A-Za-z0-9_-]*)[/]?([A-Za-z0-9_-]*)$`)
-	CONTAINER_RE = regexp.MustCompile(`^/c/([A-Za-z0-9_-]*)$`)
+	hosts       = make(map[string]Statistics)
+	hostRe      = regexp.MustCompile(`^/h/([A-Za-z0-9_-]*)[/]?([A-Za-z0-9_-]*)$`)
+	containerRe = regexp.MustCompile(`^/c/([A-Za-z0-9_-]*)$`)
 )
 
 type Statistics struct {
@@ -42,24 +42,22 @@ func handleStatisticsRequest(w web.ResponseWriter, r *web.Request) {
 	stats, err := json.Marshal(hosts)
 
 	if err != nil {
-		http.Error(w, "", 500)
-		fmt.Fprintf(w, "%s", err)
+		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	fmt.Fprintf(w, "%s", stats)
+	fmt.Fprint(w, string(stats))
 }
 
 func handleHostListRequest(w web.ResponseWriter, r *web.Request) {
 	stats, err := json.Marshal(hosts)
 
 	if err != nil {
-		http.Error(w, "", 500)
-		fmt.Fprintf(w, "%s", err)
+		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	fmt.Fprintf(w, "%s", stats)
+	fmt.Fprint(w, string(stats))
 	http.Error(w, "", 300)
 }
 
@@ -68,13 +66,12 @@ func handleHostPing(w web.ResponseWriter, r *web.Request) {
 }
 
 func handleHostCreateRequest(w web.ResponseWriter, r *web.Request) {
-	hostname := HOST_RE.FindStringSubmatch(r.URL.Path)[1]
+	hostname := hostRe.FindStringSubmatch(r.URL.Path)[1]
 
 	rawdata, err := ioutil.ReadAll(r.Body)
 
 	if err != nil {
-		http.Error(w, "Error while reading request body", 500)
-		fmt.Fprintf(w, "%s", err)
+		http.Error(w, err.Error(), 500)
 		return
 	}
 
@@ -83,22 +80,21 @@ func handleHostCreateRequest(w web.ResponseWriter, r *web.Request) {
 		return
 	}
 
-	var hostdata = Statistics{}
+	hostdata := Statistics{}
 	json.Unmarshal(rawdata, &hostdata)
-	hosts[hostname] = &hostdata
+	hosts[hostname] = hostdata
 
 	http.Error(w, "201 Created", 201)
 	return
 }
 
 func handleHostInformationRequest(w web.ResponseWriter, r *web.Request) {
-	hostname := HOST_RE.FindStringSubmatch(r.URL.Path)[1]
+	hostname := hostRe.FindStringSubmatch(r.URL.Path)[1]
 
 	hostinfo, err := json.Marshal(hosts[hostname])
 
 	if err != nil {
-		http.Error(w, "", 500)
-		fmt.Fprintf(w, "%s", err)
+		http.Error(w, err.Error(), 500)
 		return
 	}
 
@@ -107,7 +103,7 @@ func handleHostInformationRequest(w web.ResponseWriter, r *web.Request) {
 		return
 	}
 
-	fmt.Fprintf(w, "%s", hostinfo)
+	fmt.Fprint(w, hostinfo)
 }
 
 func handleHostOperationRequest(w web.ResponseWriter, r *web.Request) {
@@ -136,5 +132,5 @@ func main() {
 		Get("/c/:cid", handleFindHostByContainerRequest).
 		Post("/c/:cid", handleContainerCreateRequest)
 
-	http.ListenAndServe("192.168.4.84:8081", router)
+	http.ListenAndServe(":8081", router)
 }
