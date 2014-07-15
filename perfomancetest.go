@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"heaverd-ng/libperfomance"
+	"os"
 	"time"
 )
 
@@ -16,16 +17,34 @@ func LocalRefreshRoutine() {
 
 	// testing
 	for {
-		go a.Refresh()
-		go b.Refresh()
-		go c.Refresh()
+		go func() {
+			err := a.Refresh()
+			if err != nil {
+				fmt.Printf("ERROR OCCURED: %v\n", err)
+				os.Exit(1)
+			}
+		}()
+		go func() {
+			err := b.Refresh()
+			if err != nil {
+				fmt.Printf("ERROR OCCURED: %v\n", err)
+				os.Exit(1)
+			}
+		}()
+		go func() {
+			err := c.Refresh()
+			if err != nil {
+				fmt.Printf("ERROR OCCURED: %v\n", err)
+				os.Exit(1)
+			}
+		}()
 		time.Sleep(time.Second)
 	}
 }
 
 func main() {
 	go LocalRefreshRoutine()
-
+	name := os.Args[1]
 	Hosts := make(map[string]*libperfomance.Host)
 	Hosts["a"] = &a
 	Hosts["b"] = &b
@@ -38,14 +57,15 @@ func main() {
 		//	fmt.Printf("%v: Host %v: length: %v\n", i, host.Hostname, host.GetLength())
 		//}
 		Segments := libperfomance.CalculateSegments(Hosts)
-		//for i, seg := range Segments {
-		//	fmt.Printf("%v: segment: %+v\n", i, seg)
-		//}
-		host, err := libperfomance.ChooseHost("testa", Segments)
+		for i, seg := range Segments {
+			fmt.Printf("%v: segment: %+v\n", i, seg)
+		}
+		host, err := libperfomance.ChooseHost(name, Segments)
+		fmt.Printf("Container %v has hash: %v\n", name, libperfomance.Hash(name))
 		if err != nil {
 			fmt.Printf("Error occured: %v\n", err)
 		} else {
-			fmt.Printf("%v\n", host)
+			fmt.Printf("Choosedhost: %v\n", host)
 		}
 	}
 
