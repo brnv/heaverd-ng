@@ -2,18 +2,18 @@ package main
 
 import (
 	"fmt"
-	"heaverd-ng/libperfomance"
+	"heaverd-ng/libscore/score"
 	"os"
 	"time"
 )
 
-var a, b, c libperfomance.Host
+var a, b, c score.Host
 
 func LocalRefreshRoutine() {
 	// NOTE: MEM_MIN in kbytes
-	a = libperfomance.Host{Reserved: libperfomance.Reserved{CPU_MIN: 100, DISK_MIN: 0.1, MEM_MIN: 1048576, OP_TIME_THRESHOLD: 300, SLOWNESS: 120, UPTIME_PERIOD: 130}}
-	b = libperfomance.Host{Reserved: libperfomance.Reserved{CPU_MIN: 100, DISK_MIN: 0.1, MEM_MIN: 1048576, OP_TIME_THRESHOLD: 300, SLOWNESS: 120, UPTIME_PERIOD: 130}}
-	c = libperfomance.Host{Reserved: libperfomance.Reserved{CPU_MIN: 100, DISK_MIN: 0.1, MEM_MIN: 1048576, OP_TIME_THRESHOLD: 300, SLOWNESS: 120, UPTIME_PERIOD: 130}}
+	a = score.Host{Reserved: score.Reserved{CPU_MIN: 100, DISK_MIN: 0.1, MEM_MIN: 1048576, OP_TIME_THRESHOLD: 300, SLOWNESS: 120, UPTIME_PERIOD: 130}}
+	b = score.Host{Reserved: score.Reserved{CPU_MIN: 100, DISK_MIN: 0.1, MEM_MIN: 1048576, OP_TIME_THRESHOLD: 300, SLOWNESS: 120, UPTIME_PERIOD: 130}}
+	c = score.Host{Reserved: score.Reserved{CPU_MIN: 100, DISK_MIN: 0.1, MEM_MIN: 1048576, OP_TIME_THRESHOLD: 300, SLOWNESS: 120, UPTIME_PERIOD: 130}}
 
 	// testing
 	for {
@@ -45,7 +45,7 @@ func LocalRefreshRoutine() {
 func main() {
 	go LocalRefreshRoutine()
 	name := os.Args[1]
-	Hosts := make(map[string]*libperfomance.Host)
+	Hosts := make(map[string]*score.Host)
 	Hosts["a"] = &a
 	Hosts["b"] = &b
 	Hosts["c"] = &c
@@ -56,12 +56,12 @@ func main() {
 		//for i, host := range Hosts {
 		//	fmt.Printf("%v: Host %v: length: %v\n", i, host.Hostname, host.GetLength())
 		//}
-		Segments := libperfomance.CalculateSegments(Hosts)
+		Segments := score.CalculateSegments(Hosts)
 		for i, seg := range Segments {
 			fmt.Printf("%v: segment: %+v\n", i, seg)
 		}
-		host, err := libperfomance.ChooseHost(name, Segments)
-		fmt.Printf("Container %v has hash: %v\n", name, libperfomance.Hash(name))
+		host, err := score.ChooseHost(name, Segments)
+		fmt.Printf("Container %v has hash: %v\n", name, score.Hash(name))
 		if err != nil {
 			fmt.Printf("Error occured: %v\n", err)
 		} else {
