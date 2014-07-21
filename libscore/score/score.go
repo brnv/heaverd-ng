@@ -1,16 +1,15 @@
-package libperfomance
+package score
 
 import (
 	"crypto/sha1"
 	"fmt"
-	"heaverd-ng/res/linux"
-	"heaverd-ng/res/linux/zfs"
+	"heaverd-ng/libstats/linux"
+	"heaverd-ng/libstats/zfs"
 	"math"
 	"sort"
 	"time"
 )
 
-// Structure of resources of host machine
 type Resources struct {
 	// current cpu usage in % by containers in host
 	Cpu int
@@ -147,24 +146,24 @@ func ChooseHost(container string, fragmentation map[string]*Segment) (host strin
 
 // refresh method takes 1sec to complete operation, for determining current cpu usage
 func (host *Host) Refresh() (err error) {
-	host.Hostname, err = linux.GetHostName()
+	host.Hostname, err = linux.HostName()
 	if err != nil {
 		return err
 	}
-	host.Resources.ZfsArcMax, err = zfs.GetArcMax()
+	host.Resources.ZfsArcMax, err = zfs.ArcMax()
 	if err != nil {
 		return err
 	}
 
-	CpuCapacity, CpuUsage, err := linux.GetCpuStats()
+	CpuCapacity, CpuUsage, err := linux.Cpu()
 	if err != nil {
 		return err
 	}
-	DiskCapacity, DiskUsage, err := linux.GetDiskStats()
+	DiskCapacity, DiskUsage, err := linux.Disk()
 	if err != nil {
 		return err
 	}
-	RamCapacity, RamUsage, err := linux.GetRamStats()
+	RamCapacity, RamUsage, err := linux.Memory()
 	if err != nil {
 		return err
 	}
@@ -181,7 +180,7 @@ func (host *Host) Refresh() (err error) {
 	host.Resources.RamCapacity = RamCapacity
 	host.Factors.RamWeight = 1 - MinNorm(host.Resources.Ram, host.Resources.RamCapacity-host.Resources.ZfsArcMax-host.Reserved.MEM_MIN)
 
-	host.Resources.Uptime, err = linux.GetUptime()
+	host.Resources.Uptime, err = linux.Uptime()
 	if err != nil {
 		return err
 	}
