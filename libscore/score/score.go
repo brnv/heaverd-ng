@@ -3,70 +3,26 @@ package score
 import (
 	"crypto/sha1"
 	"fmt"
-	"heaverd-ng/libstats/linux"
-	"heaverd-ng/libstats/zfs"
+	"heaverd-ng/libscore/host"
 	"math"
 	"sort"
 	"time"
 )
 
-type Resources struct {
-	// current cpu usage in % by containers in host
-	Cpu int
-	// cpu capacity (# of cores * 100%)
-	CpuCapacity int
-	// current disk free space (containers working partition)
-	Disk int
-	// total disk capacity
-	DiskCapacity int
-	// current ram free
-	Ram int
-	// total ram capacity
-	RamCapacity int
-
-	// current zfs_arc_max value
-	ZfsArcMax int
-
-	// control operation time
-	ControlOpTime int
-	// uptime value in seconds
-	Uptime int
-}
-
-// resource reservation counstants
-type Reserved struct {
-	// system reservation of CPU (defaul 100 (%) = 1 core for example)
-	CPU_MIN int
-	// system reservation of disk
-	DISK_MIN float32
-	// system reservation of memory
-	MEM_MIN int
-	// time in seconds after which the host is considered to be slow
-	OP_TIME_THRESHOLD int
-	// time of operation of host elimination from balancing
-	SLOWNESS int
-	// time of operation of host introduction in balancing
-	UPTIME_PERIOD int
-}
-
-// weight & factors
-type Factors struct {
-	CpuWeight    float64
-	DiskWeight   float64
-	RamWeight    float64
-	SpeedFactor  float64
-	UptimeFactor float64
-}
-
-// define single host configuration structure
-type Host struct {
-	// Hostname string
-	Hostname  string
-	Resources Resources
-	Reserved  Reserved
-	Factors   Factors
-	length    float64
-}
+const (
+	cpuIdle  = 100
+	diskIdle = 0.1
+	memFree  = 1048576
+	//значение времени в секундах,
+	//после которого хост считается тормозящим
+	opTimeThreshold = 300
+	//скорость выведения сервера из балансировки
+	//при тормозах (чем выше — тем медленнее)
+	slowness = 120
+	//корость введения сервера в балансировку
+	//после ребута (чем выше — тем медленнее)
+	uptime = 130
+)
 
 // segment, where host-server lies
 type Segment struct {
@@ -95,19 +51,8 @@ func Hash(input string) float64 {
 	return float64(ret) / 1000.0
 }
 
-// normalization by minimal argument
-func MinNorm(a, b int) float64 {
-	var min int
-	if a < b {
-		min = a
-	} else {
-		min = b
-	}
-	return float64(min) / float64(b)
-}
-
 // calculate host segments
-func CalculateSegments(input map[string]*Host) map[string]*Segment {
+func CalculateSegments(input map[string]*host.Host) map[string]*Segment {
 	slice := make([]string, len(input))
 	Segments := make(map[string]*Segment)
 	sum := 0.0
@@ -115,7 +60,7 @@ func CalculateSegments(input map[string]*Host) map[string]*Segment {
 	count := 0
 	// get all legnths and summary the segment
 	for name, host := range input {
-		Segments[name] = &Segment{X: 0.0, Y: host.GetLength()}
+		Segments[name] = &Segment{X: 0.0, Y: calculate(host)}
 		sum += Segments[name].Y
 		slice[count] = name
 		count += 1
@@ -144,59 +89,26 @@ func ChooseHost(container string, fragmentation map[string]*Segment) (host strin
 	return "", &PError{time.Now(), fmt.Sprintf("Cannot assign any host to container name %v", container)}
 }
 
-// refresh method takes 1sec to complete operation, for determining current cpu usage
-func (host *Host) Refresh() (err error) {
-	host.Hostname, err = linux.HostName()
-	if err != nil {
-		return err
-	}
-	host.Resources.ZfsArcMax, err = zfs.ArcMax()
-	if err != nil {
-		return err
-	}
+func calculate(host *host.Host) float64 {
+	cpuWeight := 1.0 - minNorm(host.CpuUsage, host.CpuCapacity-cpuIdle)
+	diskWeight := 1.0 - minNorm(int(float32(host.DiskCapacity)*diskIdle), host.DiskUsage)
+	ramWeight := 1 - minNorm(host.RamUsage, host.RamCapacity-host.ZfsArcMax-memFree)
+	uptimeFactor := 2 * math.Atan(float64(host.Uptime)/float64(uptime)) / math.Pi
 
-	CpuCapacity, CpuUsage, err := linux.Cpu()
-	if err != nil {
-		return err
-	}
-	DiskCapacity, DiskUsage, err := linux.Disk()
-	if err != nil {
-		return err
-	}
-	RamCapacity, RamUsage, err := linux.Memory()
-	if err != nil {
-		return err
-	}
+	speedFactor := 1 - 2*math.Atan(math.Max(0, float64(host.ControlOpTime-opTimeThreshold))/float64(slowness))
 
-	host.Resources.Cpu = (CpuUsage + host.Resources.Cpu) / 2
-	host.Resources.CpuCapacity = CpuCapacity
-	host.Factors.CpuWeight = 1.0 - MinNorm(host.Resources.Cpu, host.Resources.CpuCapacity-host.Reserved.CPU_MIN)
+	score := cpuWeight * diskWeight * ramWeight * speedFactor * uptimeFactor
 
-	host.Resources.Disk = DiskUsage
-	host.Resources.DiskCapacity = DiskCapacity
-	host.Factors.DiskWeight = 1.0 - MinNorm(int(float32(host.Resources.DiskCapacity)*host.Reserved.DISK_MIN), host.Resources.Disk)
-
-	host.Resources.Ram = RamUsage
-	host.Resources.RamCapacity = RamCapacity
-	host.Factors.RamWeight = 1 - MinNorm(host.Resources.Ram, host.Resources.RamCapacity-host.Resources.ZfsArcMax-host.Reserved.MEM_MIN)
-
-	host.Resources.Uptime, err = linux.Uptime()
-	if err != nil {
-		return err
-	}
-
-	// TODO: determine control operation time
-	host.Resources.ControlOpTime = 2
-
-	host.Factors.UptimeFactor = 2 * math.Atan(float64(host.Resources.Uptime)/float64(host.Reserved.UPTIME_PERIOD)) / math.Pi
-
-	host.Factors.SpeedFactor = 1 - 2*math.Atan(math.Max(0, float64(host.Resources.ControlOpTime-host.Reserved.OP_TIME_THRESHOLD))/float64(host.Reserved.SLOWNESS))
-
-	host.length = host.Factors.CpuWeight * host.Factors.DiskWeight * host.Factors.RamWeight * host.Factors.SpeedFactor * host.Factors.UptimeFactor
-
-	return
+	return score
 }
 
-func (host *Host) GetLength() float64 {
-	return host.length
+// normalization by minimal argument
+func minNorm(a, b int) float64 {
+	var min int
+	if a < b {
+		min = a
+	} else {
+		min = b
+	}
+	return float64(min) / float64(b)
 }
