@@ -2,18 +2,19 @@ package main
 
 import (
 	"fmt"
+	"heaverd-ng/libscore/host"
 	"heaverd-ng/libscore/score"
 	"os"
 	"time"
 )
 
-var a, b, c score.Host
+var a, b, c host.Host
 
 func LocalRefreshRoutine() {
 	// NOTE: MEM_MIN in kbytes
-	a = score.Host{Reserved: score.Reserved{CPU_MIN: 100, DISK_MIN: 0.1, MEM_MIN: 1048576, OP_TIME_THRESHOLD: 300, SLOWNESS: 120, UPTIME_PERIOD: 130}}
-	b = score.Host{Reserved: score.Reserved{CPU_MIN: 100, DISK_MIN: 0.1, MEM_MIN: 1048576, OP_TIME_THRESHOLD: 300, SLOWNESS: 120, UPTIME_PERIOD: 130}}
-	c = score.Host{Reserved: score.Reserved{CPU_MIN: 100, DISK_MIN: 0.1, MEM_MIN: 1048576, OP_TIME_THRESHOLD: 300, SLOWNESS: 120, UPTIME_PERIOD: 130}}
+	a = host.Host{}
+	b = host.Host{}
+	c = host.Host{}
 
 	// testing
 	for {
@@ -45,7 +46,7 @@ func LocalRefreshRoutine() {
 func main() {
 	go LocalRefreshRoutine()
 	name := os.Args[1]
-	Hosts := make(map[string]*score.Host)
+	Hosts := make(map[string]*host.Host)
 	Hosts["a"] = &a
 	Hosts["b"] = &b
 	Hosts["c"] = &c
