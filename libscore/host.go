@@ -1,4 +1,4 @@
-package host
+package libscore
 
 import (
 	"heaverd-ng/libstats/linux"
