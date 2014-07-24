@@ -2,18 +2,18 @@ package main
 
 import (
 	"fmt"
-	"heaverd-ng/libscore/host"
+	"heaverd-ng/libscore"
 	"os"
 	"time"
 )
 
-var a, b, c host.Host
+var a, b, c libscore.Host
 
 func LocalRefreshRoutine() {
 	// NOTE: MEM_MIN in kbytes
-	a = host.Host{}
-	b = host.Host{}
-	c = host.Host{}
+	a = libscore.Host{}
+	b = libscore.Host{}
+	c = libscore.Host{}
 
 	// testing
 	for {
@@ -45,7 +45,7 @@ func LocalRefreshRoutine() {
 func main() {
 	go LocalRefreshRoutine()
 	name := os.Args[1]
-	Hosts := make(map[string]*host.Host)
+	Hosts := make(map[string]*libscore.Host)
 	Hosts["a"] = &a
 	Hosts["b"] = &b
 	Hosts["c"] = &c
@@ -56,12 +56,12 @@ func main() {
 		//for i, host := range Hosts {
 		//	fmt.Printf("%v: Host %v: length: %v\n", i, host.Hostname, host.GetLength())
 		//}
-		Segments := libperfomance.CalculateSegments(Hosts)
+		Segments := libscore.CalculateSegments(Hosts)
 		for i, seg := range Segments {
 			fmt.Printf("%v: segment: %+v\n", i, seg)
 		}
-		host, err := libperfomance.ChooseHost(name, Segments)
-		fmt.Printf("Container %v has hash: %v\n", name, libperfomance.Hash(name))
+		host, err := libscore.ChooseHost(name, Segments)
+		fmt.Printf("Container %v has hash: %v\n", name, libscore.Hash(name))
 		if err != nil {
 			fmt.Printf("Error occured: %v\n", err)
 		} else {

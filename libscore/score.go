@@ -1,30 +1,22 @@
-package libperfomance
+package libscore
 
 import (
 	"crypto/sha1"
 	"fmt"
-	"heaverd-ng/libscore/host"
 	"math"
 	"sort"
 	"time"
 )
 
 const (
-	cpuIdle  = 100
-	diskIdle = 0.1
-	memFree  = 1048576
-	//значение времени в секундах,
-	//после которого хост считается тормозящим
+	cpuIdle         = 100
+	diskIdle        = 0.1
+	memFree         = 1048576
 	opTimeThreshold = 300
-	//скорость выведения сервера из балансировки
-	//при тормозах (чем выше — тем медленнее)
-	slowness = 120
-	//корость введения сервера в балансировку
-	//после ребута (чем выше — тем медленнее)
-	uptime = 130
+	slowness        = 120
+	uptime          = 130
 )
 
-// segment, where host-server lies
 type Segment struct {
 	X, Y float64
 }
@@ -38,10 +30,8 @@ func (e *PError) Error() string {
 	return fmt.Sprintf("[%v], %v", e.When, e.What)
 }
 
-// Generate value that belongs segment [0;1]
 func Hash(input string) float64 {
-	data := []byte(input)
-	hashsum := sha1.Sum(data)
+	hashsum := sha1.Sum([]byte(input))
 	var ret uint32 = 0
 	// length of hashsum is always eq 20
 	for i := 0; i < 20; i++ {
@@ -52,7 +42,7 @@ func Hash(input string) float64 {
 }
 
 // calculate host segments
-func CalculateSegments(input map[string]*host.Host) map[string]*Segment {
+func CalculateSegments(input map[string]*Host) map[string]*Segment {
 	slice := make([]string, len(input))
 	Segments := make(map[string]*Segment)
 	sum := 0.0
@@ -89,7 +79,7 @@ func ChooseHost(container string, fragmentation map[string]*Segment) (host strin
 	return "", &PError{time.Now(), fmt.Sprintf("Cannot assign any host to container name %v", container)}
 }
 
-func calculate(host *host.Host) float64 {
+func calculate(host *Host) float64 {
 	cpuWeight := 1.0 - minNorm(host.CpuUsage, host.CpuCapacity-cpuIdle)
 	diskWeight := 1.0 - minNorm(int(float32(host.DiskCapacity)*diskIdle), host.DiskUsage)
 	ramWeight := 1 - minNorm(host.RamUsage, host.RamCapacity-host.ZfsArcMax-memFree)
