@@ -7,6 +7,7 @@ import (
 
 type Host struct {
 	Hostname      string
+	NetAddr       []string
 	CpuUsage      int
 	CpuCapacity   int
 	DiskUsage     int
@@ -48,5 +49,10 @@ func (host *Host) Refresh() (err error) {
 	}
 	// TODO: determine control operation time
 	host.ControlOpTime = 2
+	host.NetAddr, err = linux.NetAddr()
+	if err != nil {
+		return err
+	}
+
 	return err
 }

@@ -3,6 +3,7 @@ package linux
 import (
 	"heaverd-ng/libstats/lxc"
 	"io/ioutil"
+	"net"
 	"os"
 	"os/exec"
 	"regexp"
@@ -95,5 +96,17 @@ func HostName() (hostname string, err error) {
 		return "", err
 	}
 
+	return
+}
+
+func NetAddr() (netaddr []string, err error) {
+	hostname, err := HostName()
+	if err != nil {
+		return
+	}
+	netaddr, err = net.LookupHost(hostname)
+	if err != nil {
+		return
+	}
 	return
 }
