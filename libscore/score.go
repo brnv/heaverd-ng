@@ -2,10 +2,10 @@ package libscore
 
 import (
 	"crypto/sha1"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
-	"time"
 )
 
 const (
@@ -19,15 +19,6 @@ const (
 
 type Segment struct {
 	X, Y float64
-}
-
-type PError struct {
-	When time.Time
-	What string
-}
-
-func (e *PError) Error() string {
-	return fmt.Sprintf("[%v], %v", e.When, e.What)
 }
 
 func Hash(input string) float64 {
@@ -76,7 +67,9 @@ func ChooseHost(container string, fragmentation map[string]*Segment) (host strin
 			return name, nil
 		}
 	}
-	return "", &PError{time.Now(), fmt.Sprintf("Cannot assign any host to container name %v", container)}
+	return "", errors.New(
+		fmt.Sprintf("Cannot assign any host to container name %v", container))
+
 }
 
 func calculate(host *Host) float64 {
