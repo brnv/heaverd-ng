@@ -3,52 +3,58 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"heaverd-ng/libscore"
 	"io"
 	"log"
 	"net"
+	"os"
 	"os/exec"
-	"time"
 )
 
-type Message struct {
-	Name, Text string
-}
-
 func main() {
-	l, err := net.Listen("tcp", ":1444")
+	cluster := make(map[string]libscore.Host)
+	host := libscore.Host{}
+	hostChan := make(chan libscore.Host)
+
+	connection, err := net.Listen("tcp", ":1444")
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	go datasender()
+	go clusterListener(connection, hostChan)
 
 	for {
-		socket, _ := l.Accept()
+		select {
+		case hostInfo := <-hostChan:
+			cluster[hostInfo.Hostname] = hostInfo
+		default:
+			err := host.Refresh()
+			if err != nil {
+				fmt.Printf("Error refreshing my host state: %v\n", err)
+				os.Exit(1)
+			}
+			json, _ := json.Marshal(host)
+
+			cmd := exec.Command("./heaverd-query.sh", "hostinfo", string(json))
+			cmd.Output()
+
+			fmt.Println(cluster)
+		}
+	}
+
+}
+
+func clusterListener(connection net.Listener, hostChan chan libscore.Host) {
+	for {
+		socket, _ := connection.Accept()
 		dec := json.NewDecoder(socket)
-		var m Message
-		if err := dec.Decode(&m); err == io.EOF {
+		var host libscore.Host
+		if err := dec.Decode(&host); err == io.EOF {
 			break
 		} else if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Printf("%s", m)
+		hostChan <- host
 		socket.Close()
 	}
-}
-
-func datasender() {
-	const jsonStream = `
-		{"Name": "Ed", "Text": "Knock knock."}
-	`
-	for {
-		send(jsonStream)
-		time.Sleep(time.Second * 1)
-	}
-}
-
-func send(message string) {
-	cmd := exec.Command("./heaverd-query.sh", "send", string(message))
-	out, _ := cmd.Output()
-
-	fmt.Println(string(out))
 }
