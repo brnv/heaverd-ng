@@ -7,6 +7,7 @@ import (
 
 type Host struct {
 	Hostname      string
+	NetAddr       []string
 	CpuUsage      int
 	CpuCapacity   int
 	DiskUsage     int
@@ -20,6 +21,10 @@ type Host struct {
 
 func (host *Host) Refresh() error {
 	hostname, err := linux.HostName()
+	if err != nil {
+		return err
+	}
+	netAddr, err = linux.NetAddr()
 	if err != nil {
 		return err
 	}
@@ -49,6 +54,7 @@ func (host *Host) Refresh() error {
 
 	*host = Host{
 		Hostname:      hostname,
+		NetAddr:       netAddr,
 		CpuUsage:      cpuUsage,
 		CpuCapacity:   cpuCapacity,
 		DiskUsage:     diskUsage,
@@ -60,5 +66,5 @@ func (host *Host) Refresh() error {
 		Uptime:        uptime,
 	}
 
-	return err
+	return nil
 }

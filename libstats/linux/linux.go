@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"heaverd-ng/libstats/lxc"
+	"net"
 	"os"
 	"os/exec"
 	"runtime"
@@ -120,4 +121,16 @@ func HostName() (hostname string, err error) {
 	}
 
 	return hostname, err
+}
+
+func NetAddr() (netaddr []string, err error) {
+	hostname, err := HostName()
+	if err != nil {
+		return
+	}
+	netaddr, err = net.LookupHost(hostname)
+	if err != nil {
+		return
+	}
+	return
 }
