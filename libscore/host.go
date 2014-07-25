@@ -15,11 +15,12 @@ type Host struct {
 	RamCapacity   int
 	ZfsArcMax     int
 	ControlOpTime int
-	Uptime        int
+	Uptime        int64
 }
 
 // refresh method takes 1sec to complete operation, for determining current cpu usage
-func (host *Host) Refresh() (err error) {
+func (host *Host) Refresh() error {
+	var err error
 	host.Hostname, err = linux.HostName()
 	if err != nil {
 		return err

@@ -1,19 +1,23 @@
 package zfs
 
 import (
-	"fmt"
-	"os"
+	"os/exec"
+	"strconv"
+	"strings"
 )
 
 func ArcMax() (int, error) {
-	file, err := os.Open("/sys/module/zfs/parameters/zfs_arc_max")
+	cmd := exec.Command("grep", "c_max", "/proc/spl/kstat/zfs/arcstats")
+
+	out, err := cmd.Output()
 	if err != nil {
 		return 0, err
 	}
 
-	arcMaxBytes := 0
-	fmt.Fscanf(file, "%d", &arcMaxBytes)
-	file.Close()
+	arcMaxBytes, err := strconv.Atoi(strings.Fields(string(out))[2])
+	if err != nil {
+		return 0, err
+	}
 
-	return arcMaxBytes / 1024, err
+	return arcMaxBytes / 1024, nil
 }

@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+// CpuTicks возвращает метрику использования процессора контейнером,
+// для пользовательского и системного времени, в "тиках"
 func CpuTicks() (ticks int, err error) {
 	stats, err := ioutil.ReadFile("/sys/fs/cgroup/cpu/lxc/cpuacct.stat")
 	if err != nil {

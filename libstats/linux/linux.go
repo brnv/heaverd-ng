@@ -2,10 +2,8 @@ package linux
 
 import (
 	"heaverd-ng/libstats/lxc"
-	"io/ioutil"
 	"os"
 	"os/exec"
-	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -13,23 +11,25 @@ import (
 	"time"
 )
 
-var (
-	memCapacityRe = regexp.MustCompile(`MemTotal:\s+(\d+)`)
-	memFreeRe     = regexp.MustCompile(`MemFree:\s+(\d+)`)
-)
-
 func Memory() (capacity int, usage int, err error) {
-	meminfo, err := ioutil.ReadFile("/proc/meminfo")
+	cmd := exec.Command("grep", "MemTotal", "/proc/meminfo")
+	out, err := cmd.Output()
 	if err != nil {
 		return 0, 0, err
 	}
 
-	capacity, err = strconv.Atoi(memCapacityRe.FindStringSubmatch(string(meminfo))[1])
+	capacity, err = strconv.Atoi(strings.Fields(string(out))[1])
 	if err != nil {
 		return 0, 0, err
 	}
 
-	free, err := strconv.Atoi(memFreeRe.FindStringSubmatch(string(meminfo))[1])
+	cmd = exec.Command("grep", "MemFree", "/proc/meminfo")
+	out, err = cmd.Output()
+	if err != nil {
+		return 0, 0, err
+	}
+
+	free, err := strconv.Atoi(strings.Fields(string(out))[1])
 	if err != nil {
 		return 0, 0, err
 	}
@@ -80,13 +80,14 @@ func Disk() (capacity int, usage int, err error) {
 	return capacity, usage, err
 }
 
-func Uptime() (int, error) {
+func Uptime() (uptime int64, err error) {
 	var info syscall.Sysinfo_t
-	err := syscall.Sysinfo(&info)
+	err = syscall.Sysinfo(&info)
 	if err != nil {
 		return 0, err
 	}
-	return int(info.Uptime), nil
+	uptime = info.Uptime
+	return uptime, err
 }
 
 func HostName() (hostname string, err error) {
@@ -95,5 +96,5 @@ func HostName() (hostname string, err error) {
 		return "", err
 	}
 
-	return
+	return hostname, err
 }
