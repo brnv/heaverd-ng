@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"heaverd-ng/libscore"
-	"io"
 	"log"
 	"net"
 	"os"
@@ -47,14 +46,17 @@ func main() {
 func clusterListener(connection net.Listener, hostChan chan libscore.Host) {
 	for {
 		socket, _ := connection.Accept()
-		dec := json.NewDecoder(socket)
-		var host libscore.Host
-		if err := dec.Decode(&host); err == io.EOF {
-			break
-		} else if err != nil {
-			log.Fatal(err)
-		}
-		hostChan <- host
-		socket.Close()
+		go parseSocketMessage(socket, hostChan)
 	}
+}
+
+func parseSocketMessage(socket net.Conn, hostChan chan libscore.Host) {
+	dec := json.NewDecoder(socket)
+	var host libscore.Host
+	err := dec.Decode(&host)
+	if err != nil {
+		log.Fatal(err)
+	}
+	hostChan <- host
+	socket.Close()
 }
