@@ -8,14 +8,23 @@ import (
 	"sort"
 )
 
-const (
-	cpuIdle         = 100
-	diskIdle        = 0.1
-	memFree         = 1048576
-	opTimeThreshold = 300
-	slowness        = 120
-	uptime          = 130
-)
+type Profile struct {
+	ReservedCPU          int
+	ReservedDiskCapacity float32
+	ReservedRAM          int
+	SlowOpThreshold      int
+	LagReactionSpeed     int
+	UptimeFactor         int
+}
+
+var defaultProfile = Profile{
+	ReservedCPU:          100,
+	ReservedDiskCapacity: 0.1,
+	ReservedRAM:          0, //1048576,
+	SlowOpThreshold:      300,
+	LagReactionSpeed:     120,
+	UptimeFactor:         130,
+}
 
 type Segment struct {
 	X, Y float64
@@ -23,11 +32,7 @@ type Segment struct {
 
 func Hash(input string) float64 {
 	hashsum := sha1.Sum([]byte(input))
-	var ret uint32 = 0
-	// length of hashsum is always eq 20
-	for i := 0; i < 20; i++ {
-		ret = ret + uint32(hashsum[19-i])*uint32(math.Pow(16, float64(i)))
-	}
+	ret := uint32(hashsum[0]) + uint32(hashsum[1])*(1<<8)
 	ret = ret % 1000
 	return float64(ret) / 1000.0
 }
@@ -41,7 +46,7 @@ func CalculateSegments(input map[string]*Host) map[string]*Segment {
 	count := 0
 	// get all legnths and summary the segment
 	for name, host := range input {
-		Segments[name] = &Segment{X: 0.0, Y: calculate(host)}
+		Segments[name] = &Segment{X: 0.0, Y: calculate(host, defaultProfile)}
 		sum += Segments[name].Y
 		slice[count] = name
 		count += 1
@@ -72,13 +77,13 @@ func ChooseHost(container string, fragmentation map[string]*Segment) (host strin
 
 }
 
-func calculate(host *Host) float64 {
-	cpuWeight := 1.0 - minNorm(host.CpuUsage, host.CpuCapacity-cpuIdle)
-	diskWeight := 1.0 - minNorm(int(float32(host.DiskCapacity)*diskIdle), host.DiskUsage)
-	ramWeight := 1 - minNorm(host.RamUsage, host.RamCapacity-host.ZfsArcMax-memFree)
-	uptimeFactor := 2 * math.Atan(float64(host.Uptime)/float64(uptime)) / math.Pi
+func calculate(host *Host, profile Profile) float64 {
+	cpuWeight := 1.0 - minNorm(host.CpuUsage, host.CpuCapacity-profile.ReservedCPU)
+	diskWeight := 1.0 - minNorm(int(float32(host.DiskCapacity)*profile.ReservedDiskCapacity), host.DiskUsage)
+	ramWeight := 1 - minNorm(host.RamUsage, host.RamCapacity-host.ZfsArcMax-profile.ReservedRAM)
+	uptimeFactor := 2 * math.Atan(float64(host.Uptime)/float64(profile.UptimeFactor)) / math.Pi
 
-	speedFactor := 1 - 2*math.Atan(math.Max(0, float64(host.ControlOpTime-opTimeThreshold))/float64(slowness))
+	speedFactor := 1 - 2*math.Atan(math.Max(0, float64(host.ControlOpTime-profile.SlowOpThreshold))/float64(profile.LagReactionSpeed))
 
 	score := cpuWeight * diskWeight * ramWeight * speedFactor * uptimeFactor
 
