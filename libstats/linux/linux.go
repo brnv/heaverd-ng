@@ -1,6 +1,8 @@
 package linux
 
 import (
+	"errors"
+	"fmt"
 	"heaverd-ng/libstats/lxc"
 	"os"
 	"os/exec"
@@ -10,6 +12,37 @@ import (
 	"syscall"
 	"time"
 )
+
+var cpuMeasure = startCpuMeasure()
+
+type CPUMeasure struct {
+	usage chan int
+	err   chan error
+}
+
+func startCpuMeasure() CPUMeasure {
+	ch := CPUMeasure{}
+	ch.usage = make(chan int)
+	ch.err = make(chan error)
+	go func() {
+		for {
+			ticks1, err := lxc.CpuTicks()
+			if err != nil {
+				ch.err <- err
+				continue
+			}
+			time.Sleep(time.Second)
+			ticks2, err := lxc.CpuTicks()
+			if err != nil {
+				ch.err <- err
+				continue
+			}
+			usage := ticks2 - ticks1
+			ch.usage <- usage
+		}
+	}()
+	return ch
+}
 
 func Memory() (capacity int, usage int, err error) {
 	cmd := exec.Command("grep", "MemTotal", "/proc/meminfo")
@@ -35,27 +68,22 @@ func Memory() (capacity int, usage int, err error) {
 	}
 
 	usage = capacity - free
+	if usage < 0 {
+		return 0, 0, errors.New(
+			fmt.Sprintf("Free memory value is bigger than total capacity"))
+	}
 
 	return capacity, usage, err
 }
 
 func Cpu() (capacity int, usage int, err error) {
 	capacity = runtime.NumCPU() * 100
-
-	ticks1, err := lxc.CpuTicks()
-	if err != nil {
-		return 0, 0, err
+	select {
+	case usage = <-cpuMeasure.usage:
+	case err = <-cpuMeasure.err:
+	default:
 	}
-	time.Sleep(time.Second)
-	ticks2, err := lxc.CpuTicks()
-	if err != nil {
-		return 0, 0, err
-	}
-
-	usage = ticks2 - ticks1
-
 	return capacity, usage, err
-
 }
 
 func Disk() (capacity int, usage int, err error) {
