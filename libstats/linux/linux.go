@@ -26,18 +26,18 @@ func startCpuMeasure() CPUMeasure {
 	ch.err = make(chan error)
 	go func() {
 		for {
-			ticks1, err := lxc.CpuTicks()
+			ticksBeforeSleep, err := lxc.CpuTicks()
 			if err != nil {
 				ch.err <- err
 				continue
 			}
 			time.Sleep(time.Second)
-			ticks2, err := lxc.CpuTicks()
+			ticksAfterSleep, err := lxc.CpuTicks()
 			if err != nil {
 				ch.err <- err
 				continue
 			}
-			usage := ticks2 - ticks1
+			usage := ticksBeforeSleep - ticksAfterSleep
 			ch.usage <- usage
 		}
 	}()
@@ -50,29 +50,24 @@ func Memory() (capacity int, usage int, err error) {
 	if err != nil {
 		return 0, 0, err
 	}
-
 	capacity, err = strconv.Atoi(strings.Fields(string(out))[1])
 	if err != nil {
 		return 0, 0, err
 	}
-
 	cmd = exec.Command("grep", "MemFree", "/proc/meminfo")
 	out, err = cmd.Output()
 	if err != nil {
 		return 0, 0, err
 	}
-
 	free, err := strconv.Atoi(strings.Fields(string(out))[1])
 	if err != nil {
 		return 0, 0, err
 	}
-
 	usage = capacity - free
 	if usage < 0 {
 		return 0, 0, errors.New(
 			fmt.Sprintf("Free memory value is bigger than total capacity"))
 	}
-
 	return capacity, usage, err
 }
 

@@ -17,10 +17,10 @@ type Profile struct {
 	UptimeFactor         int
 }
 
-var defaultProfile = Profile{
+var DefaultProfile = Profile{
 	ReservedCPU:          100,
 	ReservedDiskCapacity: 0.1,
-	ReservedRAM:          1048576,
+	ReservedRAM:          1 * 1024 * 1024,
 	SlowOpThreshold:      300,
 	LagReactionSpeed:     120,
 	UptimeFactor:         130,
@@ -39,38 +39,38 @@ func (s HostsRange) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s HostsRange) Less(i, j int) bool { return s[i].Hostname < s[j].Hostname }
 
 func Segments(hosts []Host) []Segment {
-	Segments := []Segment{}
+	segments := []Segment{}
 	scoreSum := 0.0
 	for _, host := range hosts {
-		score := calculate(host, defaultProfile)
-		Segments = append(Segments, Segment{Hostname: host.Hostname, Score: score})
+		score := calculateHostScore(host, DefaultProfile)
+		segments = append(segments, Segment{Hostname: host.Hostname, Score: score})
 		scoreSum += score
 	}
-	sort.Sort(HostsRange(Segments))
+	sort.Sort(HostsRange(segments))
 	shift := 0.0
-	for i := range Segments {
-		Segments[i].X = shift
-		Segments[i].Y = Segments[i].Score/scoreSum + shift
-		shift = Segments[i].Y
+	for i := range segments {
+		segments[i].X = shift
+		segments[i].Y = segments[i].Score/scoreSum + shift
+		shift = segments[i].Y
 	}
-	return Segments
+	return segments
 }
 
-func ChooseHost(container string, segments []Segment) (host string, err error) {
-	cval := hash(container)
+func ChooseHost(containerName string, segments []Segment) (host string, err error) {
+	point := hash(containerName)
 	for _, segment := range segments {
-		if cval >= segment.X && cval <= segment.Y {
+		if point >= segment.X && point <= segment.Y {
 			return segment.Hostname, nil
 		}
 	}
 	return "", errors.New(
-		fmt.Sprintf("Cannot assign any host to container name %v", container))
+		fmt.Sprintf("Cannot assign any host to container name %v", containerName))
 }
 
-func calculate(host Host, profile Profile) float64 {
+func calculateHostScore(host Host, profile Profile) float64 {
 	cpuWeight := 1.0 - minNorm(host.CpuUsage, host.CpuCapacity-profile.ReservedCPU)
 	diskWeight := 1.0 - minNorm(int(float32(host.DiskCapacity)*profile.ReservedDiskCapacity), host.DiskUsage)
-	ramWeight := 1 - minNorm(host.RamUsage, host.RamCapacity-host.ZfsArcMax-profile.ReservedRAM)
+	ramWeight := 1 - minNorm(host.RamUsage, host.RamCapacity-(host.ZfsArcMax/1024)-profile.ReservedRAM)
 	uptimeFactor := 2 * math.Atan(float64(host.Uptime)/float64(profile.UptimeFactor)) / math.Pi
 	speedFactor := 1 - 2*math.Atan(math.Max(0, float64(host.ControlOpTime-
 		profile.SlowOpThreshold))/float64(profile.LagReactionSpeed))

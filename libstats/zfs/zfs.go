@@ -14,10 +14,10 @@ func ArcMax() (int, error) {
 		return 0, err
 	}
 
-	arcMaxBytes, err := strconv.Atoi(strings.Fields(string(out))[2])
+	arcMax, err := strconv.Atoi(strings.Fields(string(out))[2])
 	if err != nil {
 		return 0, err
 	}
 
-	return arcMaxBytes / 1024, nil
+	return arcMax, nil
 }
