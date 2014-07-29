@@ -18,36 +18,47 @@ type Host struct {
 	Uptime        int64
 }
 
-// refresh method takes 1sec to complete operation, for determining current cpu usage
 func (host *Host) Refresh() error {
-	var err error
-	host.Hostname, err = linux.HostName()
+	hostname, err := linux.HostName()
 	if err != nil {
 		return err
 	}
-	host.ZfsArcMax, err = zfs.ArcMax()
+	zfsArcMax, err := zfs.ArcMax()
 	if err != nil {
 		return err
 	}
-	CpuCapacity, CpuUsage, err := linux.Cpu()
+	cpuCapacity, cpuUsage, err := linux.Cpu()
 	if err != nil {
 		return err
 	}
-	host.CpuUsage = (CpuUsage + host.CpuUsage) / 2
-	host.CpuCapacity = CpuCapacity
-	host.DiskCapacity, host.DiskUsage, err = linux.Disk()
+	cpuUsage = (cpuUsage + host.CpuUsage) / 2
+	diskCapacity, diskUsage, err := linux.Disk()
 	if err != nil {
 		return err
 	}
-	host.RamCapacity, host.RamUsage, err = linux.Memory()
+	ramCapacity, ramUsage, err := linux.Memory()
 	if err != nil {
 		return err
 	}
-	host.Uptime, err = linux.Uptime()
+	uptime, err := linux.Uptime()
 	if err != nil {
 		return err
 	}
 	// TODO: determine control operation time
-	host.ControlOpTime = 2
+	controlOpTime := 2
+
+	*host = Host{
+		Hostname:      hostname,
+		CpuUsage:      cpuUsage,
+		CpuCapacity:   cpuCapacity,
+		DiskUsage:     diskUsage,
+		DiskCapacity:  diskCapacity,
+		RamUsage:      ramUsage,
+		RamCapacity:   ramCapacity,
+		ZfsArcMax:     zfsArcMax,
+		ControlOpTime: controlOpTime,
+		Uptime:        uptime,
+	}
+
 	return err
 }
