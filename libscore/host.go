@@ -24,7 +24,7 @@ func (host *Host) Refresh() error {
 	if err != nil {
 		return err
 	}
-	netAddr, err = linux.NetAddr()
+	netAddr, err := linux.NetAddr()
 	if err != nil {
 		return err
 	}

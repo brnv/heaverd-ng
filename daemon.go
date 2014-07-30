@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"time"
 )
 
 func main() {
@@ -38,6 +39,7 @@ func main() {
 			cmd.Output()
 
 			fmt.Println(cluster)
+			time.Sleep(time.Second)
 		}
 	}
 

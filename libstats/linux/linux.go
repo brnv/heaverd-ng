@@ -69,7 +69,7 @@ func Memory() (capacity int, usage int, err error) {
 		return 0, 0, errors.New(
 			fmt.Sprintf("Free memory value is bigger than total capacity"))
 	}
-	return capacity, usage, err
+	return capacity, usage, nil
 }
 
 func Cpu() (capacity int, usage int, err error) {
@@ -79,7 +79,7 @@ func Cpu() (capacity int, usage int, err error) {
 	case err = <-cpuMeasure.err:
 	default:
 	}
-	return capacity, usage, err
+	return capacity, usage, nil
 }
 
 func Disk() (capacity int, usage int, err error) {
@@ -88,20 +88,15 @@ func Disk() (capacity int, usage int, err error) {
 	if err != nil {
 		return 0, 0, err
 	}
-
 	capacity, err = strconv.Atoi(strings.Fields(string(out))[8])
 	if err != nil {
 		return 0, 0, err
-
 	}
-
 	usage, err = strconv.Atoi(strings.Fields(string(out))[10])
 	if err != nil {
 		return 0, 0, err
-
 	}
-
-	return capacity, usage, err
+	return capacity, usage, nil
 }
 
 func Uptime() (uptime int64, err error) {
@@ -111,7 +106,7 @@ func Uptime() (uptime int64, err error) {
 		return 0, err
 	}
 	uptime = info.Uptime
-	return uptime, err
+	return uptime, nil
 }
 
 func HostName() (hostname string, err error) {
@@ -120,17 +115,17 @@ func HostName() (hostname string, err error) {
 		return "", err
 	}
 
-	return hostname, err
+	return hostname, nil
 }
 
 func NetAddr() (netaddr []string, err error) {
 	hostname, err := HostName()
 	if err != nil {
-		return
+		return []string{}, err
 	}
 	netaddr, err = net.LookupHost(hostname)
 	if err != nil {
-		return
+		return []string{}, err
 	}
-	return
+	return netaddr, nil
 }
