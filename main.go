@@ -3,10 +3,17 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/gocraft/web"
+	"heaverd-ng/libscore"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"regexp"
+
+	"github.com/gocraft/web"
+)
+
+const (
+	logHttpPrefix = "[log] [heaverd-http]"
 )
 
 var (
@@ -115,10 +122,15 @@ func handleFindHostByContainerRequest(w web.ResponseWriter, r *web.Request) {
 }
 
 func handleContainerCreateRequest(w web.ResponseWriter, r *web.Request) {
-	http.Error(w, "", 501)
+	containerName := containerRe.FindStringSubmatch(r.URL.Path)[1]
+	segments := libscore.Segments(DaemonCluster())
+	host, _ := libscore.ChooseHost(containerName, segments)
+	log.Println(host)
 }
 
 func main() {
+	go runClusterDaemon()
+
 	router := web.New(Context{}).
 		Middleware(web.LoggerMiddleware).
 		Middleware(web.ShowErrorsMiddleware).
@@ -129,8 +141,8 @@ func main() {
 		Put("/h/:hid", handleHostCreateRequest).
 		Get("/h/:hid", handleHostInformationRequest).
 		Post("/h/:hid", handleHostOperationRequest).
-		Get("/c/:cid", handleFindHostByContainerRequest).
-		Post("/c/:cid", handleContainerCreateRequest)
+		//	Get("/c/:cid", handleFindHostByContainerRequest).
+		Get("/c/:cid", handleContainerCreateRequest)
 
 	http.ListenAndServe(":8081", router)
 }

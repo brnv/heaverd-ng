@@ -38,7 +38,7 @@ func (s HostsRange) Len() int           { return len(s) }
 func (s HostsRange) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s HostsRange) Less(i, j int) bool { return s[i].Hostname < s[j].Hostname }
 
-func Segments(hosts []Host) []Segment {
+func Segments(hosts map[string]Host) []Segment {
 	segments := []Segment{}
 	scoreSum := 0.0
 	for _, host := range hosts {
@@ -75,6 +75,8 @@ func calculateHostScore(host Host, profile Profile) float64 {
 	speedFactor := 1 - 2*math.Atan(math.Max(0, float64(host.ControlOpTime-
 		profile.SlowOpThreshold))/float64(profile.LagReactionSpeed))
 
+	// TODO	пока на хосте lxbox и yapa исключил этот параметр
+	ramWeight = 1
 	score := cpuWeight * diskWeight * ramWeight * speedFactor * uptimeFactor
 
 	return score
