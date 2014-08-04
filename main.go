@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"heaverd-ng/libscore"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"regexp"
 
@@ -57,14 +56,14 @@ func handleStatisticsRequest(w web.ResponseWriter, r *web.Request) {
 }
 
 func handleHostListRequest(w web.ResponseWriter, r *web.Request) {
-	stats, err := json.Marshal(hosts)
+	_, err := json.Marshal(hosts)
 
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	fmt.Fprint(w, string(stats))
+	fmt.Fprint(w, libscore.Segments(GetCluster()))
 	http.Error(w, "", 300)
 }
 
@@ -123,9 +122,10 @@ func handleFindHostByContainerRequest(w web.ResponseWriter, r *web.Request) {
 
 func handleContainerCreateRequest(w web.ResponseWriter, r *web.Request) {
 	containerName := containerRe.FindStringSubmatch(r.URL.Path)[1]
-	segments := libscore.Segments(DaemonCluster())
+	segments := libscore.Segments(GetCluster())
 	host, _ := libscore.ChooseHost(containerName, segments)
-	log.Println(host)
+	fmt.Fprint(w, segments)
+	fmt.Fprint(w, host)
 }
 
 func main() {

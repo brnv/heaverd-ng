@@ -9,53 +9,66 @@ import (
 	"time"
 )
 
+var cluster *map[string]libscore.Host
+
 const (
 	port            = ":1444"
-	logDaemonPrefix = "[log] [heaverd-cluster]"
+	logDaemonPrefix = "[log] [heaverd] [cluster] [daemon]"
 )
-
-var cluster = make(map[string]libscore.Host)
-var host = libscore.Host{}
 
 func runClusterDaemon() {
 	log.Println(logDaemonPrefix, "start listening at", port)
 
-	notifyReadyChan := make(chan bool)
-	go selfRefresh(notifyReadyChan)
-
-	go waitForNewHosts()
-
-	for {
-		select {
-		case <-notifyReadyChan:
-			notifyCluster()
-		}
-	}
-}
-
-func waitForNewHosts() {
-	connection, err := net.Listen("tcp", port)
+	host, err := initHost()
 	if err != nil {
 		log.Fatal(logDaemonPrefix, "[error]", err)
 	}
 
+	go selfRefreshing(host)
+
+	cluster := make(map[string]libscore.Host)
+
+	listener, err := net.Listen("tcp", port)
+	if err != nil {
+		log.Fatal(logDaemonPrefix, "[error]", err)
+	}
+
+	go clusterListening(listener)
+
 	for {
-		socket, err := connection.Accept()
+		notifyCluster(host)
+	}
+}
+
+func initHost() (*libscore.Host, error) {
+	host := libscore.Host{}
+	err := host.Refresh()
+	if err != nil {
+		return nil, err
+	}
+	return &host, nil
+}
+
+func clusterListening(conn net.Listener) {
+	for {
+		socket, err := conn.Accept()
 		if err != nil {
 			log.Fatal(logDaemonPrefix, "[error]", err)
 		}
 		decoder := json.NewDecoder(socket)
 		host := libscore.Host{}
 		err = decoder.Decode(&host)
-		if err != nil {
-			log.Println(logDaemonPrefix, "[error]", err)
+		cl := *cluster
+		_, ok := cl[host.Hostname]
+		if ok != true {
+			log.Println(logDaemonPrefix, "new host registered:", host.Hostname)
 		}
-		cluster[host.Hostname] = host
+		cl[host.Hostname] = host
 		socket.Close()
 	}
 }
 
-func notifyCluster() {
+func notifyCluster(host *libscore.Host) {
 	json, err := json.Marshal(host)
 	if err != nil {
 		log.Println(logDaemonPrefix, "[error]", err)
@@ -67,17 +80,16 @@ func notifyCluster() {
 	}
 }
 
-func selfRefresh(notifyReadyChan chan bool) {
+func selfRefreshing(host *libscore.Host) {
 	for {
 		err := host.Refresh()
 		if err != nil {
 			log.Fatal(logDaemonPrefix, "[error]", err)
 		}
-		notifyReadyChan <- true
-		time.Sleep(5 * time.Second)
+		time.Sleep(time.Second)
 	}
 }
 
-func DaemonCluster() map[string]libscore.Host {
-	return cluster
+func GetCluster() map[string]libscore.Host {
+	return *cluster
 }

@@ -1,6 +1,7 @@
 package libscore
 
 import (
+	"fmt"
 	"heaverd-ng/libstats/linux"
 	"heaverd-ng/libstats/zfs"
 )
@@ -67,4 +68,8 @@ func (host *Host) Refresh() error {
 	}
 
 	return nil
+}
+
+func (host *Host) String() string {
+	return fmt.Sprint(*host)
 }
