@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"heaverd-ng/libscore"
 	"log"
 	"net"
@@ -9,28 +10,35 @@ import (
 	"time"
 )
 
-var cluster *map[string]libscore.Host
+var (
+	cluster   map[string]libscore.Host
+	logPrefix = "[log] [daemon.go]"
+)
 
 const (
-	port            = ":1444"
-	logDaemonPrefix = "[log] [heaverd] [cluster] [daemon]"
+	port = ":1444"
 )
 
 func runClusterDaemon() {
-	log.Println(logDaemonPrefix, "start listening at", port)
+	var (
+		logPostfix = "[runClusterDaemon]"
+	)
+
+	log.Println(logPrefix, logPostfix, "start listening at", port)
 
 	host, err := initHost()
 	if err != nil {
-		log.Fatal(logDaemonPrefix, "[error]", err)
+		log.Fatal(logPrefix, logPostfix, "[error]", err)
 	}
 
 	go selfRefreshing(host)
 
-	cluster := make(map[string]libscore.Host)
+	cluster = make(map[string]libscore.Host)
+	cluster = cluster
 
 	listener, err := net.Listen("tcp", port)
 	if err != nil {
-		log.Fatal(logDaemonPrefix, "[error]", err)
+		log.Fatal(logPrefix, logPostfix, "[error]", err)
 	}
 
 	go clusterListening(listener)
@@ -50,46 +58,62 @@ func initHost() (*libscore.Host, error) {
 }
 
 func clusterListening(conn net.Listener) {
+	var (
+		logPostfix = "[clusterListening]"
+	)
+
 	for {
 		socket, err := conn.Accept()
 		if err != nil {
-			log.Fatal(logDaemonPrefix, "[error]", err)
+			log.Println(logPrefix, logPostfix, "[error]", err)
+			continue
 		}
 		decoder := json.NewDecoder(socket)
 		host := libscore.Host{}
 		err = decoder.Decode(&host)
-		cl := *cluster
-		_, ok := cl[host.Hostname]
-		if ok != true {
-			log.Println(logDaemonPrefix, "new host registered:", host.Hostname)
+		if err != nil {
+			log.Println(logPrefix, logPostfix, "[error]", err)
+			continue
 		}
-		cl[host.Hostname] = host
+		_, ok := cluster[host.Hostname]
+		if ok != true {
+			log.Println(logPrefix, logPostfix, "new host registered:", host.Hostname)
+		}
+		cluster[host.Hostname] = host
 		socket.Close()
 	}
 }
 
 func notifyCluster(host *libscore.Host) {
+	var (
+		logPostfix = "[notifyCluster]"
+	)
+
 	json, err := json.Marshal(host)
 	if err != nil {
-		log.Println(logDaemonPrefix, "[error]", err)
+		log.Println(logPrefix, logPostfix, "[error]", err)
 	}
-	cmd := exec.Command("./cluster-query.sh", "notify", string(json))
+	cmd := exec.Command("./cluster-query", "notify", fmt.Sprintf("%s", json))
 	err = cmd.Run()
 	if err != nil {
-		log.Fatal(logDaemonPrefix, "[error] [cluster-query]", err)
+		log.Println(logPrefix, logPostfix, "[error]", err)
 	}
 }
 
 func selfRefreshing(host *libscore.Host) {
+	var (
+		logPostfix = "[selfRefreshing]"
+	)
+
 	for {
 		err := host.Refresh()
 		if err != nil {
-			log.Fatal(logDaemonPrefix, "[error]", err)
+			log.Println(logPrefix, logPostfix, "[error]", err)
 		}
 		time.Sleep(time.Second)
 	}
 }
 
 func GetCluster() map[string]libscore.Host {
-	return *cluster
+	return cluster
 }
