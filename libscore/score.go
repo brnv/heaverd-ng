@@ -38,7 +38,7 @@ func (s HostsRange) Len() int           { return len(s) }
 func (s HostsRange) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s HostsRange) Less(i, j int) bool { return s[i].Hostname < s[j].Hostname }
 
-func Segments(hosts map[string]Host) []Segment {
+func Segments(hosts map[string]Info) []Segment {
 	segments := []Segment{}
 	scoreSum := 0.0
 	for _, host := range hosts {
@@ -67,7 +67,7 @@ func ChooseHost(containerName string, segments []Segment) (host string, err erro
 		fmt.Sprintf("Cannot assign any host to container name %v", containerName))
 }
 
-func calculateHostScore(host Host, profile Profile) float64 {
+func calculateHostScore(host Info, profile Profile) float64 {
 	cpuWeight := 1.0 - minNorm(host.CpuUsage, host.CpuCapacity-profile.ReservedCPU)
 	diskWeight := 1.0 - minNorm(int(float32(host.DiskCapacity)*profile.ReservedDiskCapacity), host.DiskUsage)
 	ramWeight := 1 - minNorm(host.RamUsage, host.RamCapacity-(host.ZfsArcMax/1024)-profile.ReservedRAM)

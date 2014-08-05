@@ -6,7 +6,7 @@ import (
 	"heaverd-ng/libstats/zfs"
 )
 
-type Host struct {
+type Info struct {
 	Hostname      string
 	NetAddr       []string
 	CpuUsage      int
@@ -20,7 +20,7 @@ type Host struct {
 	Uptime        int64
 }
 
-func (host *Host) Refresh() error {
+func (host *Info) Refresh() error {
 	hostname, err := linux.HostName()
 	if err != nil {
 		return err
@@ -53,7 +53,7 @@ func (host *Host) Refresh() error {
 	// TODO: determine control operation time
 	controlOpTime := 2
 
-	*host = Host{
+	*host = Info{
 		Hostname:      hostname,
 		NetAddr:       netAddr,
 		CpuUsage:      cpuUsage,
@@ -70,6 +70,6 @@ func (host *Host) Refresh() error {
 	return nil
 }
 
-func (host *Host) String() string {
+func (host *Info) String() string {
 	return fmt.Sprint(*host)
 }
