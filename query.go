@@ -16,7 +16,7 @@ func main() {
 	switch flag.Arg(0) {
 	case "notify":
 		message := flag.Arg(1)
-		cmd := exec.Command("./serf", "query", "notify", message)
+		cmd := exec.Command("serf", "query", "notify", message)
 		cmd.Run()
 	case "receive-message":
 		message, err := ioutil.ReadAll(os.Stdin)

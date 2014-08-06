@@ -1,4 +1,4 @@
-package main
+package tracker
 
 import (
 	"encoding/json"
@@ -17,31 +17,22 @@ type Host struct {
 }
 
 var (
-	cluster   = make(map[string]*Host)
-	logPrefix = "[log] [daemon.go]"
+	cluster = make(map[string]*Host)
 )
 
-const (
-	port = ":1444"
-)
-
-func runClusterDaemon() {
-	var (
-		logPostfix = "[runClusterDaemon]"
-	)
-
-	log.Println(logPrefix, logPostfix, "start listening at", port)
+func Start(port string) {
+	log.Println("started at port", port)
 
 	host, err := initHost()
 	if err != nil {
-		log.Fatal(logPrefix, logPostfix, "[error]", err)
+		log.Fatal("[error]", err)
 	}
 
 	go selfRefreshing(host)
 
 	listener, err := net.Listen("tcp", port)
 	if err != nil {
-		log.Fatal(logPrefix, logPostfix, "[error]", err)
+		log.Fatal("[error]", err)
 	}
 
 	hostsChan := make(chan libscore.Info)
@@ -63,15 +54,11 @@ func initHost() (*libscore.Info, error) {
 }
 
 func clusterRefreshing(hostsChan chan libscore.Info) {
-	var (
-		logPostfix = "[clusterRefreshing]"
-	)
-
 	for {
 		select {
 		case host := <-hostsChan:
 			if _, ok := cluster[host.Hostname]; !ok {
-				log.Println(logPrefix, logPostfix, "new host registered:", host.Hostname)
+				log.Println("new host:", host.Hostname)
 				cluster[host.Hostname] = &Host{}
 			}
 			cluster[host.Hostname].info = host
@@ -80,12 +67,12 @@ func clusterRefreshing(hostsChan chan libscore.Info) {
 		default:
 			for name, host := range cluster {
 				if host.stale == true {
-					log.Println(logPrefix, logPostfix, "host is droped:", name)
+					log.Println("host is droped:", name)
 					delete(cluster, name)
 					continue
 				}
 				if time.Now().Unix()-host.lastSeen > 5 {
-					log.Println(logPrefix, logPostfix, "host is stale:", name)
+					log.Println("host is stale:", name)
 					cluster[name].stale = true
 				}
 			}
@@ -95,21 +82,17 @@ func clusterRefreshing(hostsChan chan libscore.Info) {
 }
 
 func clusterListening(conn net.Listener, hostsChan chan libscore.Info) {
-	var (
-		logPostfix = "[clusterListening]"
-	)
-
 	for {
 		socket, err := conn.Accept()
 		if err != nil {
-			log.Println(logPrefix, logPostfix, "[error]", err)
+			log.Println("[error]", err)
 			continue
 		}
 		decoder := json.NewDecoder(socket)
 		host := libscore.Info{}
 		err = decoder.Decode(&host)
 		if err != nil {
-			log.Println(logPrefix, logPostfix, "[error]", err)
+			log.Println("[error]", err)
 			continue
 		}
 
@@ -119,39 +102,40 @@ func clusterListening(conn net.Listener, hostsChan chan libscore.Info) {
 }
 
 func notifyCluster(host *libscore.Info) {
-	var (
-		logPostfix = "[notifyCluster]"
-	)
-
 	json, err := json.Marshal(host)
 	if err != nil {
-		log.Println(logPrefix, logPostfix, "[error]", err)
+		log.Println("[error]", err)
 	}
-	cmd := exec.Command("./cluster-query", "notify", fmt.Sprintf("%s", json))
+	cmd := exec.Command("heaverd-tracker-query", "notify", fmt.Sprintf("%s", json))
 	err = cmd.Run()
 	if err != nil {
-		log.Println(logPrefix, logPostfix, "[error]", err)
+		log.Fatal("[error]", err)
 	}
 }
 
 func selfRefreshing(host *libscore.Info) {
-	var (
-		logPostfix = "[selfRefreshing]"
-	)
-
 	for {
 		err := host.Refresh()
 		if err != nil {
-			log.Println(logPrefix, logPostfix, "[error]", err)
+			log.Println("[error]", err)
 		}
 		time.Sleep(time.Second)
 	}
 }
 
-func GetCluster() map[string]libscore.Info {
+func getCluster() map[string]libscore.Info {
 	result := make(map[string]libscore.Info)
 	for name, host := range cluster {
 		result[name] = host.info
 	}
 	return result
+}
+
+func GetPreferedHost(containerName string) (string, error) {
+	segments := libscore.Segments(getCluster())
+	host, err := libscore.ChooseHost(containerName, segments)
+	if err != nil {
+		return "", err
+	}
+	return host, nil
 }
