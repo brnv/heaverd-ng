@@ -28,6 +28,10 @@ func main() {
 			log.Fatal(err)
 		}
 		fmt.Fprintf(dialer, string(message))
+	case "intent":
+		message := flag.Arg(1)
+		cmd := exec.Command("serf", "query", "intent", message)
+		cmd.Run()
 	default:
 	}
 }

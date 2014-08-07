@@ -2,8 +2,20 @@ package lxc
 
 import (
 	"io/ioutil"
+	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
+)
+
+type Container struct {
+	Name   string
+	Status string
+	Ip     string
+}
+
+var (
+	heaverOutputPattern = regexp.MustCompile(`\s*([A-Za-z0-9_-]*):\s([a-z]*).*:\s([0-9\.]*)/`)
 )
 
 // CpuTicks возвращает метрику использования процессора контейнером,
@@ -23,4 +35,28 @@ func CpuTicks() (ticks int, err error) {
 	}
 	ticks = userTime + systemTime
 	return ticks, nil
+}
+
+func ContainerList() (map[string]Container, error) {
+	cmd := exec.Command("heaver", "-L")
+	heaverList, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	list := make(map[string]Container)
+	chunked := strings.Split(string(heaverList), "\n")
+	for _, outputChunk := range chunked {
+		parsed := heaverOutputPattern.FindStringSubmatch(outputChunk)
+		if parsed != nil {
+			name := parsed[1]
+			list[name] = Container{
+				Name:   name,
+				Status: parsed[2],
+				Ip:     parsed[3],
+			}
+		}
+	}
+
+	return list, nil
 }

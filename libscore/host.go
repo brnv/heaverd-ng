@@ -3,12 +3,12 @@ package libscore
 import (
 	"fmt"
 	"heaverd-ng/libstats/linux"
+	"heaverd-ng/libstats/lxc"
 	"heaverd-ng/libstats/zfs"
 )
 
 type Info struct {
 	Hostname      string
-	NetAddr       []string
 	CpuUsage      int
 	CpuCapacity   int
 	DiskUsage     int
@@ -18,6 +18,8 @@ type Info struct {
 	ZfsArcMax     int
 	ControlOpTime int
 	Uptime        int64
+	NetAddr       []string
+	Containers    map[string]lxc.Container
 }
 
 func (host *Info) Refresh() error {
@@ -53,9 +55,13 @@ func (host *Info) Refresh() error {
 	// TODO: determine control operation time
 	controlOpTime := 2
 
+	containers, err := lxc.ContainerList()
+	if err != nil {
+		return err
+	}
+
 	*host = Info{
 		Hostname:      hostname,
-		NetAddr:       netAddr,
 		CpuUsage:      cpuUsage,
 		CpuCapacity:   cpuCapacity,
 		DiskUsage:     diskUsage,
@@ -65,6 +71,8 @@ func (host *Info) Refresh() error {
 		ZfsArcMax:     zfsArcMax,
 		ControlOpTime: controlOpTime,
 		Uptime:        uptime,
+		NetAddr:       netAddr,
+		Containers:    containers,
 	}
 
 	return nil

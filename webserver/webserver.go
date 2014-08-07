@@ -5,16 +5,17 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
+	"net"
 	"net/http"
+	"os/exec"
 	"regexp"
+	"time"
 
+	"heaverd-ng/libscore"
 	"heaverd-ng/tracker"
 
 	"github.com/gocraft/web"
-)
-
-const (
-	logHttpPrefix = "[log] [heaverd-http]"
 )
 
 var (
@@ -123,11 +124,57 @@ func handleFindHostByContainerRequest(w web.ResponseWriter, r *web.Request) {
 
 func handleContainerCreateRequest(w web.ResponseWriter, r *web.Request) {
 	containerName := containerRe.FindStringSubmatch(r.URL.Path)[1]
-	preferedHost, _ := tracker.GetPreferedHost(containerName)
-	fmt.Fprint(w, preferedHost)
+	intentId := rand.Intn(5000)
+	intent := tracker.Intent{
+		Id:            intentId,
+		ContainerName: containerName,
+		Creationtime:  time.Now().Unix(),
+	}
+	intentMessage := tracker.IntentMessage{
+		tracker.MessageHeader{MessageType: "intent"},
+		intent,
+	}
+	jsoned, err := json.Marshal(intentMessage)
+	if err != nil {
+		log.Println("[error]", err)
+	}
+	cmd := exec.Command("heaverd-tracker-query", "intent", fmt.Sprintf("%s", jsoned))
+	cmd.Run()
+	if err != nil {
+		log.Fatal("[error]", err)
+	}
+
+	host, err := getPreferedHost(containerName)
+	if err != nil {
+		log.Fatal("[error]", err)
+	}
+	containerCreateMessage := tracker.ContainerCreateMessage{
+		tracker.MessageHeader{MessageType: "container-create"},
+		tracker.Intent{Id: intentId, ContainerName: containerName},
+	}
+	jsoned, err = json.Marshal(containerCreateMessage)
+	if err != nil {
+		log.Println("[error]", err)
+	}
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s%s", host, ":1444"))
+	if err != nil {
+		log.Fatal("[error]", err)
+	}
+	fmt.Fprintf(conn, fmt.Sprintf("%s", jsoned))
+}
+
+func getPreferedHost(containerName string) (string, error) {
+	segments := libscore.Segments(tracker.GetCluster())
+	host, err := libscore.ChooseHost(containerName, segments)
+	if err != nil {
+		return "", err
+	}
+	return host, nil
 }
 
 func Start(port string) {
+	rand.Seed(time.Now().UnixNano())
+
 	router := web.New(Context{}).
 		Middleware(web.LoggerMiddleware).
 		Middleware(web.ShowErrorsMiddleware).
@@ -141,6 +188,9 @@ func Start(port string) {
 		//	Get("/c/:cid", handleFindHostByContainerRequest).
 		Get("/c/:cid", handleContainerCreateRequest)
 
+	go http.ListenAndServe(port, router)
 	log.Println("started at port", port)
-	http.ListenAndServe(port, router)
+	for {
+		time.Sleep(time.Second)
+	}
 }
