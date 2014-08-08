@@ -11,77 +11,67 @@ import (
 	"time"
 )
 
-type MessageHeader struct {
-	MessageType string
-}
-
-type HostinfoMessage struct {
-	MessageHeader
-	libscore.Info
-}
-
-type IntentMessage struct {
-	MessageHeader
-	Intent
-}
-
-type ContainerCreateMessage struct {
-	MessageHeader
-	Intent
-}
-
-type Host struct {
-	info     libscore.Info
-	lastSeen int64
-	stale    bool
-}
-
-type Intent struct {
-	Id            int
-	ContainerName string
-	Creationtime  int64
-}
+type (
+	MessageHeader struct {
+		MessageType string
+	}
+	HostinfoMessage struct {
+		MessageHeader
+		libscore.Hostinfo
+	}
+	IntentMessage struct {
+		MessageHeader
+		Intent
+	}
+	ContainerCreateMessage struct {
+		MessageHeader
+		Intent
+	}
+	Intent struct {
+		Id            int
+		ContainerName string
+		CreatedAt     int64
+	}
+	Host struct {
+		info     libscore.Hostinfo
+		lastSeen int64
+		stale    bool
+	}
+)
 
 var (
-	cluster = make(map[string]*Host)
-	intents = make(map[int]Intent)
+	cluster     = make(map[string]*Host)
+	intents     = make(map[int]Intent)
+	hostsChan   = make(chan libscore.Hostinfo)
+	intentsChan = make(chan Intent)
 )
 
 func Start(port string) {
 	log.Println("started at port", port)
+	go clusterListening(port)
+	go clusterUpdating()
 
-	host, err := initHost()
+	localhostInfo := &libscore.Hostinfo{}
+	err := localhostInfo.Refresh()
 	if err != nil {
 		log.Fatal("[error]", err)
 	}
-
-	go selfRefreshing(host)
-
-	listener, err := net.Listen("tcp", port)
-	if err != nil {
-		log.Fatal("[error]", err)
-	}
-
-	hostsChan := make(chan libscore.Info)
-	intentsChan := make(chan Intent)
-	go clusterListening(listener, hostsChan, intentsChan)
-	go clusterRefreshing(hostsChan, intentsChan)
+	go func() {
+		for {
+			err := localhostInfo.Refresh()
+			if err != nil {
+				log.Println("[error]", err)
+			}
+			time.Sleep(time.Second)
+		}
+	}()
 
 	for {
-		notifyCluster(host)
+		notifyCluster(localhostInfo)
 	}
 }
 
-func initHost() (*libscore.Info, error) {
-	host := libscore.Info{}
-	err := host.Refresh()
-	if err != nil {
-		return nil, err
-	}
-	return &host, nil
-}
-
-func clusterRefreshing(hostsChan chan libscore.Info, intentsChan chan Intent) {
+func clusterUpdating() {
 	for {
 		select {
 		case host := <-hostsChan:
@@ -112,13 +102,14 @@ func clusterRefreshing(hostsChan chan libscore.Info, intentsChan chan Intent) {
 	}
 }
 
-func clusterListening(
-	conn net.Listener,
-	hostsChan chan libscore.Info,
-	intentsChan chan Intent) {
+func clusterListening(port string) {
+	messageListener, err := net.Listen("tcp", port)
+	if err != nil {
+		log.Fatal("[error]", err)
+	}
 	for {
-		socket, err := conn.Accept()
-		defer socket.Close()
+		messageSocket, err := messageListener.Accept()
+		defer messageSocket.Close()
 
 		if err != nil {
 			log.Println("[error]", err)
@@ -126,7 +117,7 @@ func clusterListening(
 		}
 
 		message := make([]byte, 1024)
-		socket.Read(message)
+		messageSocket.Read(message)
 
 		decoder := json.NewDecoder(strings.NewReader(string(message)))
 		header := MessageHeader{}
@@ -135,7 +126,7 @@ func clusterListening(
 		decoder = json.NewDecoder(strings.NewReader(string(message)))
 		switch header.MessageType {
 		case "host":
-			host := libscore.Info{}
+			host := libscore.Hostinfo{}
 			err = decoder.Decode(&host)
 			if err != nil {
 				log.Println("[error]", err)
@@ -152,10 +143,10 @@ func clusterListening(
 			if isContainerNameUnique(intent.ContainerName) == true &&
 				hasSameIntent(intent.ContainerName) == false {
 				intentsChan <- intent
-				fmt.Fprintf(socket, fmt.Sprintf("OK"))
+				fmt.Fprintf(messageSocket, fmt.Sprintf("OK"))
 			} else {
 				// TODO причина отказа
-				fmt.Fprintf(socket, fmt.Sprintf("fail"))
+				fmt.Fprintf(messageSocket, fmt.Sprintf("fail"))
 			}
 		case "container-create":
 			intent := Intent{}
@@ -191,7 +182,15 @@ func isContainerNameUnique(containerName string) bool {
 	return true
 }
 
-func notifyCluster(host *libscore.Info) {
+func GetCluster() map[string]libscore.Hostinfo {
+	result := make(map[string]libscore.Hostinfo)
+	for name, host := range cluster {
+		result[name] = host.info
+	}
+	return result
+}
+
+func notifyCluster(host *libscore.Hostinfo) {
 	message := HostinfoMessage{
 		MessageHeader{MessageType: "host"},
 		*host,
@@ -205,22 +204,4 @@ func notifyCluster(host *libscore.Info) {
 	if err != nil {
 		log.Fatal("[error]", err)
 	}
-}
-
-func selfRefreshing(host *libscore.Info) {
-	for {
-		err := host.Refresh()
-		if err != nil {
-			log.Println("[error]", err)
-		}
-		time.Sleep(time.Second)
-	}
-}
-
-func GetCluster() map[string]libscore.Info {
-	result := make(map[string]libscore.Info)
-	for name, host := range cluster {
-		result[name] = host.info
-	}
-	return result
 }

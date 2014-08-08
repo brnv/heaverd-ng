@@ -15,7 +15,7 @@ type Container struct {
 }
 
 var (
-	heaverOutputPattern = regexp.MustCompile(`\s*([A-Za-z0-9_-]*):\s([a-z]*).*:\s([0-9\.]*)/`)
+	heaverOutputPattern = regexp.MustCompile(`\s*([\w-]*):\s([a-z]*).*:\s([\d\.]*)/`)
 )
 
 // CpuTicks возвращает метрику использования процессора контейнером,

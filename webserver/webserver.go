@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
 
@@ -18,8 +17,6 @@ import (
 )
 
 type Context struct{}
-
-var containerRe = regexp.MustCompile(`^/c/([A-Za-z0-9_-]*)$`)
 
 func handleHelpRequest(w web.ResponseWriter, r *web.Request) {
 	fmt.Fprintf(w, "Справка по API в запрошенном формате")
@@ -69,20 +66,18 @@ func Start(port string) {
 		//	Get("/c/:cid", handleFindHostByContainerRequest).
 		Get("/c/:cid", handleContainerCreateRequest)
 
-	go http.ListenAndServe(port, router)
 	log.Println("started at port", port)
-	for {
-		time.Sleep(time.Second)
-	}
+	log.Fatal(http.ListenAndServe(port, router))
 }
 
 func handleContainerCreateRequest(w web.ResponseWriter, r *web.Request) {
-	containerName := containerRe.FindStringSubmatch(r.URL.Path)[1]
+	containerName := r.PathParams["cid"]
+
 	intentId := rand.Intn(5000)
 	intent := tracker.Intent{
 		Id:            intentId,
 		ContainerName: containerName,
-		Creationtime:  time.Now().Unix(),
+		CreatedAt:     time.Now().Unix(),
 	}
 	intentMessage := tracker.IntentMessage{
 		tracker.MessageHeader{MessageType: "intent"},

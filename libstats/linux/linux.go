@@ -123,6 +123,7 @@ func NetAddr() (netaddr []string, err error) {
 	if err != nil {
 		return []string{}, err
 	}
+	// FIXME is it the right way?
 	netaddr, err = net.LookupHost(hostname)
 	if err != nil {
 		return []string{}, err

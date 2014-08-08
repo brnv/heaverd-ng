@@ -7,7 +7,7 @@ import (
 	"heaverd-ng/libstats/zfs"
 )
 
-type Info struct {
+type Hostinfo struct {
 	Hostname      string
 	CpuUsage      int
 	CpuCapacity   int
@@ -22,7 +22,7 @@ type Info struct {
 	Containers    map[string]lxc.Container
 }
 
-func (host *Info) Refresh() error {
+func (host *Hostinfo) Refresh() error {
 	hostname, err := linux.HostName()
 	if err != nil {
 		return err
@@ -60,7 +60,7 @@ func (host *Info) Refresh() error {
 		return err
 	}
 
-	*host = Info{
+	*host = Hostinfo{
 		Hostname:      hostname,
 		CpuUsage:      cpuUsage,
 		CpuCapacity:   cpuCapacity,
@@ -78,6 +78,6 @@ func (host *Info) Refresh() error {
 	return nil
 }
 
-func (host *Info) String() string {
+func (host *Hostinfo) String() string {
 	return fmt.Sprint(*host)
 }
