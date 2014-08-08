@@ -93,6 +93,7 @@ func clusterRefreshing(hostsChan chan libscore.Info, intentsChan chan Intent) {
 			cluster[host.Hostname].lastSeen = time.Now().Unix()
 			cluster[host.Hostname].stale = false
 		case intent := <-intentsChan:
+			log.Println("new intent", intent.Id)
 			intents[intent.Id] = intent
 		default:
 			for name, host := range cluster {
@@ -148,7 +149,14 @@ func clusterListening(
 				log.Println("[error]", err)
 				continue
 			}
-			intentsChan <- intent
+			if isContainerNameUnique(intent.ContainerName) == true &&
+				hasSameIntent(intent.ContainerName) == false {
+				intentsChan <- intent
+				fmt.Fprintf(socket, fmt.Sprintf("OK"))
+			} else {
+				// TODO причина отказа
+				fmt.Fprintf(socket, fmt.Sprintf("fail"))
+			}
 		case "container-create":
 			intent := Intent{}
 			err = decoder.Decode(&intent)
@@ -161,6 +169,26 @@ func clusterListening(
 			}
 		}
 	}
+}
+
+func hasSameIntent(intentContainerName string) bool {
+	for _, intent := range intents {
+		if intent.ContainerName == intentContainerName {
+			return true
+		}
+	}
+	return false
+}
+
+func isContainerNameUnique(containerName string) bool {
+	for _, host := range cluster {
+		for _, container := range host.info.Containers {
+			if container.Name == containerName {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func notifyCluster(host *libscore.Info) {
