@@ -74,57 +74,63 @@ func handleContainerCreateRequest(w web.ResponseWriter, r *web.Request) {
 	containerName := r.PathParams["cid"]
 
 	intentId := rand.Intn(5000)
-	intent := tracker.Intent{
-		Id:            intentId,
-		ContainerName: containerName,
-		CreatedAt:     time.Now().Unix(),
-	}
-	intentMessage := tracker.IntentMessage{
-		tracker.MessageHeader{MessageType: "intent"},
-		intent,
-	}
-	jsoned, err := json.Marshal(intentMessage)
+
+	message, err := json.Marshal(struct {
+		Type string
+		Body interface{}
+	}{
+		"container-create-intent",
+		tracker.Intent{
+			Id:            intentId,
+			ContainerName: containerName,
+			CreatedAt:     time.Now().Unix(),
+		},
+	})
+
 	if err != nil {
-		log.Println("[error]", err)
+		log.Fatal("[error]", err)
 	}
 
-	cluster := tracker.GetCluster()
+	cluster := tracker.Cluster()
 	for _, host := range cluster {
 		conn, err := net.Dial("tcp", fmt.Sprintf("%s%s", host.Hostname, ":1444"))
 		if err != nil {
 			log.Fatal("[error]", err)
 		}
-		fmt.Fprintf(conn, fmt.Sprintf("%s", jsoned))
-		message := make([]byte, 10)
-		conn.Read(message)
 
-		if strings.Contains(string(message), "fail") {
+		fmt.Fprintf(conn, fmt.Sprintf("%s", message))
+
+		// FIXME find a better way to do that
+		answer := make([]byte, 10)
+		conn.Read(answer)
+		if strings.Contains(string(answer), "fail") {
 			http.Error(w, "Not unique container name", 400)
 			return
 		}
 	}
 
-	host, err := getPreferedHost(containerName)
+	targetHost, err := getPreferedHost(containerName)
 	if err != nil {
 		log.Fatal("[error]", err)
 	}
-	containerCreateMessage := tracker.ContainerCreateMessage{
-		tracker.MessageHeader{MessageType: "container-create"},
+
+	containerCreateMessage, err := json.Marshal(struct {
+		Type string
+		Body interface{}
+	}{
+		"container-create",
 		tracker.Intent{Id: intentId, ContainerName: containerName},
-	}
-	jsoned, err = json.Marshal(containerCreateMessage)
-	if err != nil {
-		log.Println("[error]", err)
-	}
-	conn, err := net.Dial("tcp", fmt.Sprintf("%s%s", host, ":1444"))
+	})
+
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s%s", targetHost, ":1444"))
 	if err != nil {
 		log.Fatal("[error]", err)
 	}
-	fmt.Fprintf(conn, fmt.Sprintf("%s", jsoned))
+	fmt.Fprintf(conn, fmt.Sprintf("%s", containerCreateMessage))
 }
 
 func getPreferedHost(containerName string) (string, error) {
-	segments := libscore.Segments(tracker.GetCluster())
+	segments := libscore.Segments(tracker.Cluster())
 	host, err := libscore.ChooseHost(containerName, segments)
 	if err != nil {
 		return "", err

@@ -7,26 +7,10 @@ import (
 	"log"
 	"net"
 	"os/exec"
-	"strings"
 	"time"
 )
 
 type (
-	MessageHeader struct {
-		MessageType string
-	}
-	HostinfoMessage struct {
-		MessageHeader
-		libscore.Hostinfo
-	}
-	IntentMessage struct {
-		MessageHeader
-		Intent
-	}
-	ContainerCreateMessage struct {
-		MessageHeader
-		Intent
-	}
 	Intent struct {
 		Id            int
 		ContainerName string
@@ -83,7 +67,7 @@ func clusterUpdating() {
 			cluster[host.Hostname].lastSeen = time.Now().Unix()
 			cluster[host.Hostname].stale = false
 		case intent := <-intentsChan:
-			log.Println("new intent", intent.Id)
+			log.Println("new intent", intent.Id, intent.ContainerName)
 			intents[intent.Id] = intent
 		default:
 			for name, host := range cluster {
@@ -103,54 +87,57 @@ func clusterUpdating() {
 }
 
 func clusterListening(port string) {
+	message := struct {
+		Type string
+		Body json.RawMessage
+	}{}
+
 	messageListener, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatal("[error]", err)
 	}
+
 	for {
 		messageSocket, err := messageListener.Accept()
 		defer messageSocket.Close()
-
 		if err != nil {
 			log.Println("[error]", err)
 			continue
 		}
 
-		message := make([]byte, 1024)
-		messageSocket.Read(message)
+		err = json.NewDecoder(messageSocket).Decode(&message)
+		if err != nil {
+			log.Println("[error]", err)
+			continue
+		}
 
-		decoder := json.NewDecoder(strings.NewReader(string(message)))
-		header := MessageHeader{}
-		decoder.Decode(&header)
-
-		decoder = json.NewDecoder(strings.NewReader(string(message)))
-		switch header.MessageType {
-		case "host":
+		switch message.Type {
+		case "hostinfo-update":
 			host := libscore.Hostinfo{}
-			err = decoder.Decode(&host)
+			err := json.Unmarshal(message.Body, &host)
 			if err != nil {
 				log.Println("[error]", err)
 				continue
 			}
 			hostsChan <- host
-		case "intent":
+		case "container-create-intent":
 			intent := Intent{}
-			err = decoder.Decode(&intent)
+			err := json.Unmarshal(message.Body, &intent)
 			if err != nil {
 				log.Println("[error]", err)
 				continue
 			}
-			if isContainerNameUnique(intent.ContainerName) == true &&
-				hasSameIntent(intent.ContainerName) == false {
+			if !existContainer(intent.ContainerName) &&
+				!existIntent(intent.ContainerName) {
 				intentsChan <- intent
-				fmt.Fprintf(messageSocket, fmt.Sprintf("OK"))
+				fmt.Fprintf(messageSocket, fmt.Sprintf("ok"))
 			} else {
 				// TODO причина отказа
 				fmt.Fprintf(messageSocket, fmt.Sprintf("fail"))
 			}
 		case "container-create":
 			intent := Intent{}
-			err = decoder.Decode(&intent)
+			err := json.Unmarshal(message.Body, &intent)
 			if err != nil {
 				log.Println("[error]", err)
 				continue
@@ -162,7 +149,7 @@ func clusterListening(port string) {
 	}
 }
 
-func hasSameIntent(intentContainerName string) bool {
+func existIntent(intentContainerName string) bool {
 	for _, intent := range intents {
 		if intent.ContainerName == intentContainerName {
 			return true
@@ -171,18 +158,18 @@ func hasSameIntent(intentContainerName string) bool {
 	return false
 }
 
-func isContainerNameUnique(containerName string) bool {
+func existContainer(containerName string) bool {
 	for _, host := range cluster {
 		for _, container := range host.info.Containers {
 			if container.Name == containerName {
-				return false
+				return true
 			}
 		}
 	}
-	return true
+	return false
 }
 
-func GetCluster() map[string]libscore.Hostinfo {
+func Cluster() map[string]libscore.Hostinfo {
 	result := make(map[string]libscore.Hostinfo)
 	for name, host := range cluster {
 		result[name] = host.info
@@ -191,15 +178,17 @@ func GetCluster() map[string]libscore.Hostinfo {
 }
 
 func notifyCluster(host *libscore.Hostinfo) {
-	message := HostinfoMessage{
-		MessageHeader{MessageType: "host"},
-		*host,
-	}
-	json, err := json.Marshal(message)
+	message, err := json.Marshal(struct {
+		Type string
+		Body interface{}
+	}{
+		"hostinfo-update",
+		host,
+	})
 	if err != nil {
 		log.Println("[error]", err)
 	}
-	cmd := exec.Command("heaverd-tracker-query", "notify", fmt.Sprintf("%s", json))
+	cmd := exec.Command("heaverd-tracker-query", "notify", fmt.Sprintf("%s", message))
 	err = cmd.Run()
 	if err != nil {
 		log.Fatal("[error]", err)
