@@ -3,6 +3,7 @@ package tracker
 import (
 	"encoding/json"
 	"fmt"
+	"heaverd-ng/heaver"
 	"heaverd-ng/libscore"
 	"log"
 	"net"
@@ -105,47 +106,46 @@ func clusterListening(port string) {
 			continue
 		}
 
-		err = json.NewDecoder(messageSocket).Decode(&message)
-		if err != nil {
-			log.Println("[error]", err)
-			continue
-		}
-
-		switch message.Type {
-		case "hostinfo-update":
-			host := libscore.Hostinfo{}
-			err := json.Unmarshal(message.Body, &host)
+		go func() {
+			defer messageSocket.Close()
+			err = json.NewDecoder(messageSocket).Decode(&message)
 			if err != nil {
 				log.Println("[error]", err)
-				continue
 			}
-			hostsChan <- host
-		case "container-create-intent":
-			intent := Intent{}
-			err := json.Unmarshal(message.Body, &intent)
-			if err != nil {
-				log.Println("[error]", err)
-				continue
+			switch message.Type {
+			case "hostinfo-update":
+				host := libscore.Hostinfo{}
+				err := json.Unmarshal(message.Body, &host)
+				if err != nil {
+					log.Println("[error]", err)
+				}
+				hostsChan <- host
+			case "container-create-intent":
+				intent := Intent{}
+				err := json.Unmarshal(message.Body, &intent)
+				if err != nil {
+					log.Println("[error]", err)
+				}
+				if !existContainer(intent.ContainerName) &&
+					!existIntent(intent.ContainerName) {
+					intentsChan <- intent
+					fmt.Fprintf(messageSocket, fmt.Sprintf("ok"))
+				} else {
+					// TODO причина отказа
+					fmt.Fprintf(messageSocket, fmt.Sprintf("fail"))
+				}
+			case "container-create":
+				intent := Intent{}
+				err := json.Unmarshal(message.Body, &intent)
+				if err != nil {
+					log.Println("[error]", err)
+				}
+				if i, ok := intents[intent.Id]; ok {
+					log.Println("Creating...")
+					log.Println(heaver.Create(i.ContainerName))
+				}
 			}
-			if !existContainer(intent.ContainerName) &&
-				!existIntent(intent.ContainerName) {
-				intentsChan <- intent
-				fmt.Fprintf(messageSocket, fmt.Sprintf("ok"))
-			} else {
-				// TODO причина отказа
-				fmt.Fprintf(messageSocket, fmt.Sprintf("fail"))
-			}
-		case "container-create":
-			intent := Intent{}
-			err := json.Unmarshal(message.Body, &intent)
-			if err != nil {
-				log.Println("[error]", err)
-				continue
-			}
-			if _, ok := intents[intent.Id]; ok {
-				log.Println("Ready to create")
-			}
-		}
+		}()
 	}
 }
 

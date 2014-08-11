@@ -23,7 +23,8 @@ func handleHelpRequest(w web.ResponseWriter, r *web.Request) {
 }
 
 func handleStatisticsRequest(w web.ResponseWriter, r *web.Request) {
-	http.Error(w, "", 501)
+	cluster, _ := json.Marshal(tracker.Cluster())
+	fmt.Fprint(w, string(cluster))
 }
 
 func handleHostListRequest(w web.ResponseWriter, r *web.Request) {
@@ -98,7 +99,7 @@ func handleContainerCreateRequest(w web.ResponseWriter, r *web.Request) {
 			log.Fatal("[error]", err)
 		}
 
-		fmt.Fprintf(conn, fmt.Sprintf("%s", message))
+		fmt.Fprint(conn, fmt.Sprintf("%s", message))
 
 		// FIXME find a better way to do that
 		answer := make([]byte, 10)
@@ -126,7 +127,8 @@ func handleContainerCreateRequest(w web.ResponseWriter, r *web.Request) {
 	if err != nil {
 		log.Fatal("[error]", err)
 	}
-	fmt.Fprintf(conn, fmt.Sprintf("%s", containerCreateMessage))
+	fmt.Fprint(conn, fmt.Sprintf("%s", containerCreateMessage))
+	// TODO wait for answer
 }
 
 func getPreferedHost(containerName string) (string, error) {
