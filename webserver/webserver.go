@@ -1,13 +1,14 @@
 package webserver
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"net"
 	"net/http"
-	"strings"
 	"time"
 
 	"heaverd-ng/libscore"
@@ -73,10 +74,9 @@ func Start(port string) {
 
 func handleContainerCreateRequest(w web.ResponseWriter, r *web.Request) {
 	containerName := r.PathParams["cid"]
-
 	intentId := rand.Intn(5000)
 
-	message, err := json.Marshal(struct {
+	intentMessage, err := json.Marshal(struct {
 		Type string
 		Body interface{}
 	}{
@@ -87,25 +87,27 @@ func handleContainerCreateRequest(w web.ResponseWriter, r *web.Request) {
 			CreatedAt:     time.Now().Unix(),
 		},
 	})
-
 	if err != nil {
 		log.Fatal("[error]", err)
 	}
 
-	cluster := tracker.Cluster()
-	for _, host := range cluster {
-		conn, err := net.Dial("tcp", fmt.Sprintf("%s%s", host.Hostname, ":1444"))
+	for _, host := range tracker.Cluster() {
+		nodeConnection, err := net.Dial("tcp",
+			fmt.Sprintf("%s%s", host.Hostname, ":1444"))
+		defer nodeConnection.Close()
 		if err != nil {
-			log.Fatal("[error]", err)
+			log.Println("[error]", err)
 		}
+		fmt.Fprint(nodeConnection, fmt.Sprintf("%s", intentMessage))
 
-		fmt.Fprint(conn, fmt.Sprintf("%s", message))
-
-		// FIXME find a better way to do that
-		answer := make([]byte, 10)
-		conn.Read(answer)
-		if strings.Contains(string(answer), "fail") {
-			http.Error(w, "Not unique container name", 400)
+		nodeAnswer, err := bufio.NewReader(nodeConnection).ReadString('\n')
+		if err != nil {
+			if err != io.EOF {
+				log.Println("[error]", err)
+			}
+		}
+		if string(nodeAnswer) == "fail" {
+			http.Error(w, "Not unique container name", 409)
 			return
 		}
 	}
@@ -115,7 +117,7 @@ func handleContainerCreateRequest(w web.ResponseWriter, r *web.Request) {
 		log.Fatal("[error]", err)
 	}
 
-	containerCreateMessage, err := json.Marshal(struct {
+	createMessage, err := json.Marshal(struct {
 		Type string
 		Body interface{}
 	}{
@@ -123,12 +125,20 @@ func handleContainerCreateRequest(w web.ResponseWriter, r *web.Request) {
 		tracker.Intent{Id: intentId, ContainerName: containerName},
 	})
 
-	conn, err := net.Dial("tcp", fmt.Sprintf("%s%s", targetHost, ":1444"))
+	hostConnection, err := net.Dial("tcp",
+		fmt.Sprintf("%s%s", targetHost, ":1444"))
 	if err != nil {
 		log.Fatal("[error]", err)
 	}
-	fmt.Fprint(conn, fmt.Sprintf("%s", containerCreateMessage))
-	// TODO wait for answer
+	fmt.Fprint(hostConnection, fmt.Sprintf("%s", createMessage))
+
+	hostAnswer, err := bufio.NewReader(hostConnection).ReadString('\n')
+	if err != nil {
+		if err != io.EOF {
+			log.Println("[error]", err)
+		}
+	}
+	http.Error(w, string(hostAnswer), 201)
 }
 
 func getPreferedHost(containerName string) (string, error) {

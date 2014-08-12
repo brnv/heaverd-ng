@@ -100,7 +100,6 @@ func clusterListening(port string) {
 
 	for {
 		messageSocket, err := messageListener.Accept()
-		defer messageSocket.Close()
 		if err != nil {
 			log.Println("[error]", err)
 			continue
@@ -141,8 +140,9 @@ func clusterListening(port string) {
 					log.Println("[error]", err)
 				}
 				if i, ok := intents[intent.Id]; ok {
-					log.Println("Creating...")
-					log.Println(heaver.Create(i.ContainerName))
+					log.Println("creating container", i.ContainerName)
+					result := heaver.Create(i.ContainerName)
+					fmt.Fprintf(messageSocket, result)
 				}
 			}
 		}()
