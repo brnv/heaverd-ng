@@ -2,6 +2,7 @@ package webserver
 
 import (
 	"bufio"
+	"crypto/md5"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"strconv"
 	"time"
 
 	"heaverd-ng/libscore"
@@ -17,7 +19,31 @@ import (
 	"github.com/gocraft/web"
 )
 
-type Context struct{}
+type Context struct {
+	port string
+}
+
+func Start(port string, seed int64) {
+	rand.Seed(seed)
+
+	router := web.New(Context{
+		port: port,
+	}).
+		Middleware(web.LoggerMiddleware).
+		Middleware(web.ShowErrorsMiddleware).
+		Get("/", handleHelpRequest).
+		Get("/stats/", handleStatisticsRequest).
+		Get("/h/", handleHostListRequest).
+		Get("/h/:hid/ping", handleHostPing).
+		Put("/h/:hid", handleHostCreateRequest).
+		Get("/h/:hid", handleHostInformationRequest).
+		Post("/h/:hid", handleHostOperationRequest).
+		//	Get("/c/:cid", handleFindHostByContainerRequest).
+		Get("/c/:cid", (*Context).handleContainerCreateRequest)
+
+	log.Println("started at port", port)
+	log.Fatal(http.ListenAndServe(port, router))
+}
 
 func handleHelpRequest(w web.ResponseWriter, r *web.Request) {
 	fmt.Fprintf(w, "Справка по API в запрошенном формате")
@@ -52,31 +78,13 @@ func handleFindHostByContainerRequest(w web.ResponseWriter, r *web.Request) {
 	http.Error(w, "", 501)
 }
 
-func Start(port string) {
-	rand.Seed(time.Now().UnixNano())
-
-	router := web.New(Context{}).
-		Middleware(web.LoggerMiddleware).
-		Middleware(web.ShowErrorsMiddleware).
-		Get("/", handleHelpRequest).
-		Get("/stats/", handleStatisticsRequest).
-		Get("/h/", handleHostListRequest).
-		Get("/h/:hid/ping", handleHostPing).
-		Put("/h/:hid", handleHostCreateRequest).
-		Get("/h/:hid", handleHostInformationRequest).
-		Post("/h/:hid", handleHostOperationRequest).
-		//	Get("/c/:cid", handleFindHostByContainerRequest).
-		Get("/c/:cid", handleContainerCreateRequest)
-
-	log.Println("started at port", port)
-	log.Fatal(http.ListenAndServe(port, router))
-}
-
-func handleContainerCreateRequest(w web.ResponseWriter, r *web.Request) {
+func (c *Context) handleContainerCreateRequest(w web.ResponseWriter, r *web.Request) {
 	containerName := r.PathParams["cid"]
-	intentId := rand.Intn(5000)
+	h := md5.New()
+	fmt.Fprint(h, containerName+strconv.FormatInt(time.Now().Unix(), 10))
+	intentId := fmt.Sprintf("%x", h.Sum(nil))
 
-	intentMessage, err := json.Marshal(struct {
+	intentMessage, _ := json.Marshal(struct {
 		Type string
 		Body interface{}
 	}{
@@ -87,13 +95,10 @@ func handleContainerCreateRequest(w web.ResponseWriter, r *web.Request) {
 			CreatedAt:     time.Now().Unix(),
 		},
 	})
-	if err != nil {
-		log.Fatal("[error]", err)
-	}
 
 	for _, host := range tracker.Cluster() {
 		nodeConnection, err := net.Dial("tcp",
-			fmt.Sprintf("%s%s", host.Hostname, ":1444"))
+			fmt.Sprintf("%s%s", host.Hostname, ":"+c.port))
 		defer nodeConnection.Close()
 		if err != nil {
 			log.Println("[error]", err)
@@ -126,7 +131,7 @@ func handleContainerCreateRequest(w web.ResponseWriter, r *web.Request) {
 	})
 
 	hostConnection, err := net.Dial("tcp",
-		fmt.Sprintf("%s%s", targetHost, ":1444"))
+		fmt.Sprintf("%s%s", targetHost, ":"+c.port))
 	if err != nil {
 		log.Fatal("[error]", err)
 	}

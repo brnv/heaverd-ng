@@ -13,7 +13,7 @@ import (
 
 type (
 	Intent struct {
-		Id            int
+		Id            string
 		ContainerName string
 		CreatedAt     int64
 	}
@@ -26,7 +26,7 @@ type (
 
 var (
 	cluster     = make(map[string]*Host)
-	intents     = make(map[int]Intent)
+	intents     = make(map[string]Intent)
 	hostsChan   = make(chan libscore.Hostinfo)
 	intentsChan = make(chan Intent)
 )
@@ -54,6 +54,14 @@ func Start(port string) {
 	for {
 		notifyCluster(localhostInfo)
 	}
+}
+
+func Cluster() map[string]libscore.Hostinfo {
+	result := make(map[string]libscore.Hostinfo)
+	for name, host := range cluster {
+		result[name] = host.info
+	}
+	return result
 }
 
 func clusterUpdating() {
@@ -140,10 +148,13 @@ func clusterListening(port string) {
 					log.Println("[error]", err)
 				}
 				if i, ok := intents[intent.Id]; ok {
+					log.Println("approved intent", intents[intent.Id])
 					log.Println("creating container", i.ContainerName)
 					result := heaver.Create(i.ContainerName)
 					fmt.Fprintf(messageSocket, result)
 				}
+			default:
+				log.Println("unknown message")
 			}
 		}()
 	}
@@ -168,15 +179,6 @@ func existContainer(containerName string) bool {
 	}
 	return false
 }
-
-func Cluster() map[string]libscore.Hostinfo {
-	result := make(map[string]libscore.Hostinfo)
-	for name, host := range cluster {
-		result[name] = host.info
-	}
-	return result
-}
-
 func notifyCluster(host *libscore.Hostinfo) {
 	message, err := json.Marshal(struct {
 		Type string
@@ -188,7 +190,7 @@ func notifyCluster(host *libscore.Hostinfo) {
 	if err != nil {
 		log.Println("[error]", err)
 	}
-	cmd := exec.Command("heaverd-tracker-query", "notify", fmt.Sprintf("%s", message))
+	cmd := exec.Command("heaverd-tracker-query", "-action=notify", "-message="+string(message))
 	err = cmd.Run()
 	if err != nil {
 		log.Fatal("[error]", err)

@@ -1,22 +1,29 @@
 package main
 
 import (
+	"flag"
 	"heaverd-ng/tracker"
 	"heaverd-ng/webserver"
 	"log"
-	"os"
+	"sync"
 	"time"
 )
 
 func main() {
+	flag.Parse()
+
+	var webListen string
+	flag.StringVar(&webListen, "web-listen", "8081", "")
+
+	var clusterListen string
+	flag.StringVar(&clusterListen, "cluster-listen", "1444", "")
+
 	log.SetFlags(log.Lshortfile)
-	log.SetPrefix("[log] [heaverd-ng] ")
-	log.SetOutput(os.Stdin)
+	log.SetPrefix("[heaverd-ng] ")
 
-	go webserver.Start(":8081")
-	go tracker.Start(":1444")
-
-	for {
-		time.Sleep(100)
-	}
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go webserver.Start(":"+webListen, time.Now().UnixNano())
+	go tracker.Start(":" + clusterListen)
+	wg.Wait()
 }
