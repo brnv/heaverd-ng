@@ -23,7 +23,7 @@ func main() {
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go webserver.Start(":"+webListen, time.Now().UnixNano())
-	go tracker.Start(":" + clusterListen)
+	go webserver.Start(webListen, clusterListen, time.Now().UnixNano())
+	go tracker.Start(clusterListen)
 	wg.Wait()
 }

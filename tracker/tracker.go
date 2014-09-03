@@ -25,18 +25,17 @@ type (
 )
 
 var (
-	cluster     = make(map[string]*Host)
-	intents     = make(map[string]Intent)
-	hostsChan   = make(chan libscore.Hostinfo)
-	intentsChan = make(chan Intent)
+	cluster       = make(map[string]*Host)
+	intents       = make(map[string]Intent)
+	hostsChan     = make(chan libscore.Hostinfo)
+	intentsChan   = make(chan Intent)
+	localhostInfo = &libscore.Hostinfo{}
 )
 
 func Start(port string) {
-	log.Println("started at port", port)
 	go clusterListening(port)
 	go clusterUpdating()
 
-	localhostInfo := &libscore.Hostinfo{}
 	err := localhostInfo.Refresh()
 	if err != nil {
 		log.Fatal("[error]", err)
@@ -52,7 +51,7 @@ func Start(port string) {
 	}()
 
 	for {
-		notifyCluster(localhostInfo)
+		notifyCluster()
 	}
 }
 
@@ -101,10 +100,12 @@ func clusterListening(port string) {
 		Body json.RawMessage
 	}{}
 
-	messageListener, err := net.Listen("tcp", port)
+	messageListener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		log.Fatal("[error]", err)
 	}
+
+	log.Println("started at port :", port)
 
 	for {
 		messageSocket, err := messageListener.Accept()
@@ -139,7 +140,7 @@ func clusterListening(port string) {
 					fmt.Fprintf(messageSocket, fmt.Sprintf("ok"))
 				} else {
 					// TODO причина отказа
-					fmt.Fprintf(messageSocket, fmt.Sprintf("fail"))
+					fmt.Fprintf(messageSocket, fmt.Sprintf("not_unique_name"))
 				}
 			case "container-create":
 				intent := Intent{}
@@ -150,8 +151,10 @@ func clusterListening(port string) {
 				if i, ok := intents[intent.Id]; ok {
 					log.Println("approved intent", intents[intent.Id])
 					log.Println("creating container", i.ContainerName)
-					result := heaver.Create(i.ContainerName)
-					fmt.Fprintf(messageSocket, result)
+					container := heaver.Create(i.ContainerName)
+					container.Host = localhostInfo.Hostname
+					result, _ := json.Marshal(container)
+					fmt.Fprintf(messageSocket, string(result))
 				}
 			default:
 				log.Println("unknown message")
@@ -179,13 +182,14 @@ func existContainer(containerName string) bool {
 	}
 	return false
 }
-func notifyCluster(host *libscore.Hostinfo) {
+
+func notifyCluster() {
 	message, err := json.Marshal(struct {
 		Type string
 		Body interface{}
 	}{
 		"hostinfo-update",
-		host,
+		localhostInfo,
 	})
 	if err != nil {
 		log.Println("[error]", err)

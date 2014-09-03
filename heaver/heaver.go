@@ -1,25 +1,40 @@
 package heaver
 
 import (
-	"encoding/json"
 	"heaverd-ng/libstats/lxc"
+	"log"
 	"os/exec"
+	"regexp"
 )
 
-func Create(containerName string) string {
-	cmd := exec.Command("heaver", "-CSn", containerName, "-i", "virtubuntu")
-	_, err := cmd.Output()
-	if err != nil {
+var (
+	createArgs = []string{"heaver", "-Cn", "", "-i", "virtubuntu", "--net", "auto"}
+	reIp       = regexp.MustCompile("(\\d{1,3}.\\d{1,3}.\\d{1,3}.\\d{1,3})")
+)
 
+func Create(containerName string) lxc.Container {
+	createArgs[2] = containerName
+	cmd := exec.Cmd{
+		Path: "/usr/bin/heaver",
+		Args: createArgs,
 	}
+
+	answer, err := cmd.Output()
+	if err != nil {
+		log.Println("[error]", err)
+		return lxc.Container{}
+	}
+
+	ip := ""
+	matches := reIp.FindStringSubmatch(string(answer))
+	if matches != nil {
+		ip = matches[1]
+	}
+
 	container := lxc.Container{
 		Name: containerName,
+		Ip:   ip,
 	}
 
-	result, err := json.Marshal(container)
-	if err != nil {
-
-	}
-
-	return string(result)
+	return container
 }

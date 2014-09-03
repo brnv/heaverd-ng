@@ -9,13 +9,13 @@ import (
 )
 
 type Container struct {
-	Name   string
-	Status string
-	Ip     string
+	Name string
+	Host string
+	Ip   string
 }
 
 var (
-	heaverOutputPattern = regexp.MustCompile(`\s*([\w-]*):\s([a-z]*).*:\s([\d\.]*)/`)
+	reHeaver = regexp.MustCompile(`\s*([\w-]*):\s([a-z]*).*:\s([\d\.]*)/`)
 )
 
 // CpuTicks возвращает метрику использования процессора контейнером,
@@ -45,15 +45,14 @@ func ContainerList() (map[string]Container, error) {
 	}
 
 	list := make(map[string]Container)
-	chunked := strings.Split(string(heaverList), "\n")
-	for _, outputChunk := range chunked {
-		parsed := heaverOutputPattern.FindStringSubmatch(outputChunk)
+	containers := strings.Split(string(heaverList), "\n")
+	for _, container := range containers {
+		parsed := reHeaver.FindStringSubmatch(container)
 		if parsed != nil {
 			name := parsed[1]
 			list[name] = Container{
-				Name:   name,
-				Status: parsed[2],
-				Ip:     parsed[3],
+				Name: name,
+				Ip:   parsed[3],
 			}
 		}
 	}
