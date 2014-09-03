@@ -9,13 +9,14 @@ import (
 	"time"
 )
 
+var (
+	webListen     string
+	clusterListen string
+)
+
 func main() {
 	flag.Parse()
-
-	var webListen string
 	flag.StringVar(&webListen, "web-listen", "8081", "")
-
-	var clusterListen string
 	flag.StringVar(&clusterListen, "cluster-listen", "1444", "")
 
 	log.SetFlags(log.Lshortfile)

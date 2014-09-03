@@ -150,11 +150,26 @@ func clusterListening(port string) {
 				}
 				if i, ok := intents[intent.Id]; ok {
 					log.Println("approved intent", intents[intent.Id])
-					log.Println("creating container", i.ContainerName)
+					log.Println("creating container", intents[intent.Id].ContainerName)
 					container := heaver.Create(i.ContainerName)
 					container.Host = localhostInfo.Hostname
 					result, _ := json.Marshal(container)
 					fmt.Fprintf(messageSocket, string(result))
+				}
+			case "container-control":
+				var Control struct {
+					ContainerName string
+					Action        string
+				}
+				err := json.Unmarshal(message.Body, &Control)
+				if err != nil {
+					log.Println("[error]", err)
+				}
+				switch heaver.Control(Control.ContainerName, Control.Action) {
+				case true:
+					fmt.Fprintf(messageSocket, "true")
+				case false:
+					fmt.Fprintf(messageSocket, "false")
 				}
 			default:
 				log.Println("unknown message")

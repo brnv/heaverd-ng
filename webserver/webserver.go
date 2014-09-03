@@ -51,8 +51,8 @@ func Start(port string, clusterListen string, seed int64) {
 		Put("/h/:hid/:cid", handleHostContainerUpdate).
 		Delete("/h/:hid/:cid", handleContainerDelete).
 		Get("/h/:hid/:cid", handleContainerInfo).
-		Post("/h/:hid/:cid/start", handleContainerStart).
-		Post("/h/:hid/:cid/stop", handleContainerStop).
+		Post("/h/:hid/:cid/start", context.handleContainerStart).
+		Post("/h/:hid/:cid/stop", context.handleContainerStop).
 		//Post("/h/:hid/:cid/freeze", )
 		//Post("/h/:hid/:cid/unfreeze", )
 		//Get("/h/:hid/:cid/tarball", )
@@ -102,6 +102,7 @@ func handleHostInformationRequest(w web.ResponseWriter, r *web.Request) {
 
 func (c *Context) handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 	containerName := r.PathParams["cid"]
+
 	h := md5.New()
 	fmt.Fprint(h, containerName+strconv.FormatInt(time.Now().Unix(), 10))
 	intentId := fmt.Sprintf("%x", h.Sum(nil))
@@ -119,21 +120,10 @@ func (c *Context) handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 	})
 
 	for _, host := range tracker.Cluster() {
-		log.Println(host.Hostname + ":" + c.clusterListen)
-		nodeConnection, err := net.Dial("tcp", host.Hostname+":"+c.clusterListen)
-		defer nodeConnection.Close()
-		if err != nil {
-			log.Println("[error]", err)
-		}
-		fmt.Fprint(nodeConnection, string(intentMessage))
-
-		nodeAnswer, err := bufio.NewReader(nodeConnection).ReadString('\n')
-		if err != nil {
-			if err != io.EOF {
-				log.Println("[error]", err)
-			}
-		}
-		if string(nodeAnswer) == "not_unique_name" {
+		nodeAnswer := sendTcpMessage(host.Hostname+":"+c.clusterListen,
+			string(intentMessage))
+		switch nodeAnswer {
+		case "not_unique_name":
 			http.Error(w, "Not unique container name", 409)
 			return
 		}
@@ -146,27 +136,17 @@ func (c *Context) handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 		return
 	}
 
-	createMessage, err := json.Marshal(struct {
+	createMessage, _ := json.Marshal(struct {
 		Type string
 		Body interface{}
 	}{
 		"container-create",
-		tracker.Intent{Id: intentId, ContainerName: containerName},
+		tracker.Intent{Id: intentId},
 	})
 
-	hostConnection, err := net.Dial("tcp", targetHost+":"+c.clusterListen)
-	if err != nil {
-		log.Fatal("[error]", err)
-	}
-	fmt.Fprint(hostConnection, string(createMessage))
+	hostAnswer := sendTcpMessage(targetHost+":"+c.clusterListen, string(createMessage))
 
-	hostAnswer, err := bufio.NewReader(hostConnection).ReadString('\n')
-	if err != nil {
-		if err != io.EOF {
-			log.Println("[error]", err)
-		}
-	}
-	http.Error(w, string(hostAnswer), 201)
+	http.Error(w, hostAnswer, 201)
 }
 
 func handleHostContainerCreate(w web.ResponseWriter, r *web.Request) {
@@ -185,12 +165,76 @@ func handleContainerInfo(w web.ResponseWriter, r *web.Request) {
 	http.Error(w, "Получить инфороцию о контейнере", 501)
 }
 
-func handleContainerStart(w web.ResponseWriter, r *web.Request) {
-	http.Error(w, "Стартануть контейнер", 501)
+func (c *Context) handleContainerStart(w web.ResponseWriter, r *web.Request) {
+	hostname := r.PathParams["hid"]
+	containerName := r.PathParams["cid"]
+
+	if !checkHostname(hostname) {
+		http.Error(w, "Unknown host", 404)
+		return
+	}
+
+	if !checkContainer(hostname, containerName) {
+		http.Error(w, "Unknown container", 404)
+		return
+	}
+
+	controlMessage, _ := json.Marshal(struct {
+		Type string
+		Body interface{}
+	}{
+		"container-control",
+		struct {
+			ContainerName string
+			Action        string
+		}{
+			containerName,
+			"start",
+		},
+	})
+
+	switch sendTcpMessage(hostname+":"+c.clusterListen, string(controlMessage)) {
+	case "true":
+		http.Error(w, "", 204)
+	case "false":
+		http.Error(w, "Not started", 502)
+	}
 }
 
-func handleContainerStop(w web.ResponseWriter, r *web.Request) {
-	http.Error(w, "Стопнуть контейнер", 501)
+func (c *Context) handleContainerStop(w web.ResponseWriter, r *web.Request) {
+	hostname := r.PathParams["hid"]
+	containerName := r.PathParams["cid"]
+
+	if !checkHostname(hostname) {
+		http.Error(w, "Unknown host", 404)
+		return
+	}
+
+	if !checkContainer(hostname, containerName) {
+		http.Error(w, "Unknown container", 404)
+		return
+	}
+
+	controlMessage, _ := json.Marshal(struct {
+		Type string
+		Body interface{}
+	}{
+		"container-control",
+		struct {
+			ContainerName string
+			Action        string
+		}{
+			containerName,
+			"stop",
+		},
+	})
+
+	switch sendTcpMessage(hostname+":"+c.clusterListen, string(controlMessage)) {
+	case "true":
+		http.Error(w, "", 204)
+	case "false":
+		http.Error(w, "Not stopped", 502)
+	}
 }
 
 func handleContainerPing(w web.ResponseWriter, r *web.Request) {
@@ -204,4 +248,37 @@ func getPreferedHost(containerName string) (string, error) {
 		return "", err
 	}
 	return host, nil
+}
+
+func sendTcpMessage(target string, message string) string {
+	connection, err := net.Dial("tcp", target)
+	defer connection.Close()
+	if err != nil {
+		log.Println("[error]", err)
+	}
+
+	fmt.Fprint(connection, message)
+
+	answer, err := bufio.NewReader(connection).ReadString('\n')
+	if err != nil {
+		if err != io.EOF {
+			log.Println("[error]", err)
+		}
+	}
+
+	return string(answer)
+}
+
+func checkHostname(name string) bool {
+	if _, ok := tracker.Cluster()[name]; !ok {
+		return false
+	}
+	return true
+}
+
+func checkContainer(hostname string, name string) bool {
+	if _, ok := tracker.Cluster()[hostname].Containers[name]; !ok {
+		return false
+	}
+	return true
 }
