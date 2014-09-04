@@ -76,8 +76,9 @@ func clusterUpdating() {
 			cluster[host.Hostname].stale = false
 		case intent := <-intentsChan:
 			log.Println("new intent", intent.Id, intent.ContainerName)
+			intent.CreatedAt = time.Now().Unix()
 			intents[intent.Id] = intent
-		default:
+		case <-time.After(time.Second):
 			for name, host := range cluster {
 				if host.stale == true {
 					log.Println("host is droped:", name)
@@ -89,8 +90,13 @@ func clusterUpdating() {
 					cluster[name].stale = true
 				}
 			}
+			for intentId, intent := range intents {
+				if time.Now().Unix()-intent.CreatedAt > 5 {
+					log.Println("intent expired:", intent)
+					delete(intents, intentId)
+				}
+			}
 		}
-		time.Sleep(time.Second)
 	}
 }
 
@@ -134,14 +140,15 @@ func clusterListening(port string) {
 				if err != nil {
 					log.Println("[error]", err)
 				}
-				if !existContainer(intent.ContainerName) &&
-					!existIntent(intent.ContainerName) {
-					intentsChan <- intent
-					fmt.Fprintf(messageSocket, fmt.Sprintf("ok"))
+				answer := "ok"
+				if existContainer(intent.ContainerName) {
+					answer = "not_unique_name"
+				} else if existIntent(intent.ContainerName) {
+					answer = "intent_still_exists"
 				} else {
-					// TODO причина отказа
-					fmt.Fprintf(messageSocket, fmt.Sprintf("not_unique_name"))
+					intentsChan <- intent
 				}
+				fmt.Fprintf(messageSocket, fmt.Sprintf(answer))
 			case "container-create":
 				intent := Intent{}
 				err := json.Unmarshal(message.Body, &intent)

@@ -16,19 +16,17 @@ func main() {
 	if err != nil {
 		log.Fatal("[error]", err)
 	}
-	log.SetFlags(log.Lshortfile)
+
+	log.SetFlags(log.Lshortfile | log.Ltime | log.Ldate)
 	log.SetPrefix("[heaverd-tracker-query] ")
 	log.SetOutput(f)
 
 	var clusterPort string
 	flag.StringVar(&clusterPort, "cluster-port", "1444", "")
-
 	var action string
-	flag.StringVar(&action, "action", "notify", "notify|receive-message|intent")
-
+	flag.StringVar(&action, "action", "notify", "notify|receive-message")
 	var message string
 	flag.StringVar(&message, "message", "", "")
-
 	flag.Parse()
 
 	switch action {
@@ -38,17 +36,20 @@ func main() {
 	case "receive-message":
 		message, err := ioutil.ReadAll(os.Stdin)
 		if err != nil {
-			log.Println(err)
+			fmt.Printf("0")
+			return
 		}
 		dialer, err := net.Dial("tcp", ":"+clusterPort)
 		if err != nil {
-			log.Println(err)
+			fmt.Printf("0")
+			return
+		} else {
+			fmt.Fprintf(dialer, string(message))
+			fmt.Printf("1")
+			return
 		}
-		fmt.Fprintf(dialer, string(message))
-	case "intent":
-		cmd := exec.Command("serf", "query", "intent", message)
-		cmd.Run()
 	default:
 		flag.Usage()
 	}
+
 }

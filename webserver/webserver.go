@@ -49,7 +49,7 @@ func Start(port string, clusterListen string, seed int64) {
 		Post("/c/:cid", context.handleContainerCreate).
 		Post("/h/:hid/:cid", handleHostContainerCreate).
 		Put("/h/:hid/:cid", handleHostContainerUpdate).
-		Delete("/h/:hid/:cid", handleContainerDelete).
+		Delete("/h/:hid/:cid", context.handleContainerDestroy).
 		Get("/h/:hid/:cid", handleContainerInfo).
 		Post("/h/:hid/:cid/start", context.handleContainerStart).
 		Post("/h/:hid/:cid/stop", context.handleContainerStop).
@@ -115,7 +115,6 @@ func (c *Context) handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 		tracker.Intent{
 			Id:            intentId,
 			ContainerName: containerName,
-			CreatedAt:     time.Now().Unix(),
 		},
 	})
 
@@ -125,6 +124,9 @@ func (c *Context) handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 		switch nodeAnswer {
 		case "not_unique_name":
 			http.Error(w, "Not unique container name", 409)
+			return
+		case "intent_still_exists":
+			http.Error(w, "Intent still exists", 409)
 			return
 		}
 	}
@@ -157,8 +159,40 @@ func handleHostContainerUpdate(w web.ResponseWriter, r *web.Request) {
 	http.Error(w, "Обновить настройки контейнера", 501)
 }
 
-func handleContainerDelete(w web.ResponseWriter, r *web.Request) {
-	http.Error(w, "Удалить контейнер", 501)
+func (c *Context) handleContainerDestroy(w web.ResponseWriter, r *web.Request) {
+	hostname := r.PathParams["hid"]
+	containerName := r.PathParams["cid"]
+
+	if !checkHostname(hostname) {
+		http.Error(w, "Unknown host", 404)
+		return
+	}
+
+	if !checkContainer(hostname, containerName) {
+		http.Error(w, "Unknown container", 404)
+		return
+	}
+
+	controlMessage, _ := json.Marshal(struct {
+		Type string
+		Body interface{}
+	}{
+		"container-control",
+		struct {
+			ContainerName string
+			Action        string
+		}{
+			containerName,
+			"destroy",
+		},
+	})
+
+	switch sendTcpMessage(hostname+":"+c.clusterListen, string(controlMessage)) {
+	case "true":
+		http.Error(w, "", 204)
+	case "false":
+		http.Error(w, "Not destroyed", 504)
+	}
 }
 
 func handleContainerInfo(w web.ResponseWriter, r *web.Request) {

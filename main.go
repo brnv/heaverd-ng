@@ -15,11 +15,11 @@ var (
 )
 
 func main() {
-	flag.Parse()
 	flag.StringVar(&webListen, "web-listen", "8081", "")
 	flag.StringVar(&clusterListen, "cluster-listen", "1444", "")
+	flag.Parse()
 
-	log.SetFlags(log.Lshortfile)
+	log.SetFlags(log.Lshortfile | log.Ldate | log.Ltime)
 	log.SetPrefix("[heaverd-ng] ")
 
 	wg := sync.WaitGroup{}
