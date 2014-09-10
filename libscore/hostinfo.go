@@ -2,6 +2,7 @@ package libscore
 
 import (
 	"fmt"
+	"heaverd-ng/heaver"
 	"heaverd-ng/libstats/linux"
 	"heaverd-ng/libstats/lxc"
 	"heaverd-ng/libstats/zfs"
@@ -55,7 +56,7 @@ func (host *Hostinfo) Refresh() error {
 	// TODO: determine control operation time
 	controlOpTime := 2
 
-	containers, err := lxc.ContainerList()
+	containers, err := heaver.List(hostname)
 	if err != nil {
 		return err
 	}

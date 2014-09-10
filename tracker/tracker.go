@@ -2,119 +2,94 @@ package tracker
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"heaverd-ng/heaver"
 	"heaverd-ng/libscore"
+	"heaverd-ng/libstats/lxc"
 	"log"
 	"net"
-	"os/exec"
+	"sync"
 	"time"
-)
 
-type (
-	Intent struct {
-		Id            string
-		ContainerName string
-		CreatedAt     int64
-	}
-	Host struct {
-		info     libscore.Hostinfo
-		lastSeen int64
-		stale    bool
-	}
+	"github.com/coreos/go-etcd/etcd"
 )
 
 var (
-	cluster       = make(map[string]*Host)
-	intents       = make(map[string]Intent)
-	hostsChan     = make(chan libscore.Hostinfo)
-	intentsChan   = make(chan Intent)
-	localhostInfo = &libscore.Hostinfo{}
+	etcdc                 = &etcd.Client{}
+	Hostinfo              = &libscore.Hostinfo{}
+	intentContainerStatus = "pending"
 )
 
-func Start(port string) {
-	go clusterListening(port)
-	go clusterUpdating()
-
-	err := localhostInfo.Refresh()
+func Start(wg *sync.WaitGroup, port string, etcdPort string) {
+	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
-		log.Fatal("[error]", err)
+		log.Println("[error]", err)
+		wg.Done()
 	}
-	go func() {
-		for {
-			err := localhostInfo.Refresh()
-			if err != nil {
-				log.Println("[error]", err)
-			}
-			time.Sleep(time.Second)
-		}
-	}()
+
+	log.Println("started at port :", port)
+	go messageListening(listener)
+
+	etcdc = etcd.NewClient([]string{"http://localhost:" + etcdPort})
+	_, err = etcdc.CreateDir("hosts/", 0)
+	_, err = etcdc.CreateDir("containers/", 0)
 
 	for {
-		notifyCluster()
+		err = hostinfoUpdate()
+		if err != nil {
+			log.Println("[error]", err)
+		}
+		time.Sleep(time.Second)
 	}
+}
+
+func CreateIntent(targetHost string, containerName string) bool {
+	intent, _ := json.Marshal(lxc.Container{
+		Name:   containerName,
+		Host:   targetHost,
+		Status: intentContainerStatus,
+	})
+
+	_, err := etcdc.Create("containers/"+containerName, string(intent), 5)
+	if err != nil {
+		log.Println("[error]", err)
+		return false
+	}
+
+	log.Println("Intent: host", targetHost+", container", containerName)
+	return true
 }
 
 func Cluster() map[string]libscore.Hostinfo {
 	result := make(map[string]libscore.Hostinfo)
-	for name, host := range cluster {
-		result[name] = host.info
+
+	hosts, err := etcdc.Get("hosts/", true, true)
+	if err != nil {
+		log.Println("[error]", err)
+		return result
 	}
+
+	for _, node := range hosts.Node.Nodes {
+		host := libscore.Hostinfo{}
+		err := json.Unmarshal([]byte(node.Value), &host)
+		if err != nil {
+			log.Println("[error]", err)
+		}
+		result[host.Hostname] = host
+	}
+
 	return result
 }
 
-func clusterUpdating() {
-	for {
-		select {
-		case host := <-hostsChan:
-			if _, ok := cluster[host.Hostname]; !ok {
-				log.Println("new host:", host.Hostname)
-				cluster[host.Hostname] = &Host{}
-			}
-			cluster[host.Hostname].info = host
-			cluster[host.Hostname].lastSeen = time.Now().Unix()
-			cluster[host.Hostname].stale = false
-		case intent := <-intentsChan:
-			log.Println("new intent", intent.Id, intent.ContainerName)
-			intent.CreatedAt = time.Now().Unix()
-			intents[intent.Id] = intent
-		case <-time.After(time.Second):
-			for name, host := range cluster {
-				if host.stale == true {
-					log.Println("host is droped:", name)
-					delete(cluster, name)
-					continue
-				}
-				if time.Now().Unix()-host.lastSeen > 5 {
-					log.Println("host is stale:", name)
-					cluster[name].stale = true
-				}
-			}
-			for intentId, intent := range intents {
-				if time.Now().Unix()-intent.CreatedAt > 5 {
-					log.Println("intent expired:", intent)
-					delete(intents, intentId)
-				}
-			}
-		}
-	}
-}
-
-func clusterListening(port string) {
+func messageListening(listener net.Listener) {
 	message := struct {
 		Type string
 		Body json.RawMessage
 	}{}
 
-	messageListener, err := net.Listen("tcp", ":"+port)
-	if err != nil {
-		log.Fatal("[error]", err)
-	}
-
-	log.Println("started at port :", port)
-
 	for {
-		messageSocket, err := messageListener.Accept()
+		messageSocket, err := listener.Accept()
 		if err != nil {
 			log.Println("[error]", err)
 			continue
@@ -127,42 +102,23 @@ func clusterListening(port string) {
 				log.Println("[error]", err)
 			}
 			switch message.Type {
-			case "hostinfo-update":
-				host := libscore.Hostinfo{}
-				err := json.Unmarshal(message.Body, &host)
-				if err != nil {
-					log.Println("[error]", err)
-				}
-				hostsChan <- host
-			case "container-create-intent":
-				intent := Intent{}
-				err := json.Unmarshal(message.Body, &intent)
-				if err != nil {
-					log.Println("[error]", err)
-				}
-				answer := "ok"
-				if existContainer(intent.ContainerName) {
-					answer = "not_unique_name"
-				} else if existIntent(intent.ContainerName) {
-					answer = "intent_still_exists"
-				} else {
-					intentsChan <- intent
-				}
-				fmt.Fprintf(messageSocket, fmt.Sprintf(answer))
 			case "container-create":
-				intent := Intent{}
-				err := json.Unmarshal(message.Body, &intent)
+				var containerName string
+
+				err := json.Unmarshal(message.Body, &containerName)
 				if err != nil {
 					log.Println("[error]", err)
+					fmt.Fprintf(messageSocket, fmt.Sprintf("%v", err))
+					return
 				}
-				if i, ok := intents[intent.Id]; ok {
-					log.Println("approved intent", intents[intent.Id])
-					log.Println("creating container", intents[intent.Id].ContainerName)
-					container := heaver.Create(i.ContainerName)
-					container.Host = localhostInfo.Hostname
-					result, _ := json.Marshal(container)
-					fmt.Fprintf(messageSocket, string(result))
+
+				result, err := createContainer(containerName)
+				if err != nil {
+					log.Println("[error]", err)
+					fmt.Fprintf(messageSocket, fmt.Sprintf("%v", err))
+					return
 				}
+				fmt.Fprintf(messageSocket, result)
 			case "container-control":
 				var Control struct {
 					ContainerName string
@@ -174,9 +130,9 @@ func clusterListening(port string) {
 				}
 				switch heaver.Control(Control.ContainerName, Control.Action) {
 				case true:
-					fmt.Fprintf(messageSocket, "true")
+					fmt.Fprintf(messageSocket, "done")
 				case false:
-					fmt.Fprintf(messageSocket, "false")
+					fmt.Fprintf(messageSocket, "not_done")
 				}
 			default:
 				log.Println("unknown message")
@@ -185,40 +141,59 @@ func clusterListening(port string) {
 	}
 }
 
-func existIntent(intentContainerName string) bool {
-	for _, intent := range intents {
-		if intent.ContainerName == intentContainerName {
-			return true
-		}
-	}
-	return false
-}
+func createContainer(name string) (string, error) {
+	rawContainer, _ := etcdc.Get("containers/"+name, false, false)
 
-func existContainer(containerName string) bool {
-	for _, host := range cluster {
-		for _, container := range host.info.Containers {
-			if container.Name == containerName {
-				return true
-			}
-		}
-	}
-	return false
-}
+	container := lxc.Container{}
+	err := json.Unmarshal([]byte(rawContainer.Node.Value), &container)
 
-func notifyCluster() {
-	message, err := json.Marshal(struct {
-		Type string
-		Body interface{}
-	}{
-		"hostinfo-update",
-		localhostInfo,
-	})
+	if err != nil {
+		return "", err
+	}
+
+	if container.Status != intentContainerStatus {
+		return "", errors.New("Container is " + container.Status + ", not " +
+			intentContainerStatus)
+	}
+
+	log.Println("creating container", name, "on host", Hostinfo.Hostname)
+
+	_, err = etcdc.Delete("containers/"+name, false)
+	if err != nil {
+		return "", err
+	}
+
+	created := heaver.Create(name)
+	created.Host = Hostinfo.Hostname
+
+	err = hostinfoUpdate()
 	if err != nil {
 		log.Println("[error]", err)
 	}
-	cmd := exec.Command("heaverd-tracker-query", "-action=notify", "-message="+string(message))
-	err = cmd.Run()
+
+	result, _ := json.Marshal(created)
+	return string(result), nil
+}
+
+func hostinfoUpdate() error {
+	err := Hostinfo.Refresh()
 	if err != nil {
-		log.Fatal("[error]", err)
+		return err
 	}
+
+	host, _ := json.Marshal(Hostinfo)
+	_, err = etcdc.Set("hosts/"+Hostinfo.Hostname, string(host), 5)
+	if err != nil {
+		return err
+	}
+
+	for _, c := range Hostinfo.Containers {
+		container, _ := json.Marshal(c)
+		_, err = etcdc.Set("containers/"+c.Name, string(container), 5)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

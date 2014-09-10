@@ -5,10 +5,11 @@ import (
 	"log"
 	"os/exec"
 	"regexp"
+	"strings"
 )
 
 var (
-	createArgs  = []string{"heaver", "-Cn", "", "-i", "virtubuntu", "--net", "auto"}
+	createArgs  = []string{"heaver", "-Cn", "", "-i", "virtubuntu", "--net", "br0"}
 	controlArgs = []string{"heaver", "", ""}
 	startArg    = "-Sn"
 	stopArg     = "-Tn"
@@ -17,14 +18,17 @@ var (
 	reStarted   = regexp.MustCompile("started")
 	reStopped   = regexp.MustCompile("stopped")
 	reDestroyed = regexp.MustCompile("destroyed")
+	reList      = regexp.MustCompile(`\s*([\d\w-\.]*):\s([a-z]*).*:\s([\d\.]*)/`)
 )
 
 func Create(containerName string) lxc.Container {
 	createArgs[2] = containerName
 
-	output, err := getHeaverCmd(createArgs).Output()
+	cmd := getHeaverCmd(createArgs)
+	output, err := cmd.Output()
 	if err != nil {
 		log.Println("[error]", err)
+		log.Println("[error] cmd was", cmd)
 		return lxc.Container{}
 	}
 
@@ -35,8 +39,9 @@ func Create(containerName string) lxc.Container {
 	}
 
 	container := lxc.Container{
-		Name: containerName,
-		Ip:   ip,
+		Name:   containerName,
+		Status: "created",
+		Ip:     ip,
 	}
 
 	return container
@@ -71,6 +76,31 @@ func Control(containerName string, action string) bool {
 	log.Println(containerName, action)
 
 	return true
+}
+
+func List(host string) (map[string]lxc.Container, error) {
+	cmd := exec.Command("heaver", "-L")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	list := make(map[string]lxc.Container)
+	containers := strings.Split(string(output), "\n")
+	for _, container := range containers {
+		parsed := reList.FindStringSubmatch(container)
+		if parsed != nil {
+			name := parsed[1]
+			list[name] = lxc.Container{
+				Name:   name,
+				Host:   host,
+				Status: parsed[2],
+				Ip:     parsed[3],
+			}
+		}
+	}
+
+	return list, nil
 }
 
 func getHeaverCmd(args []string) *exec.Cmd {

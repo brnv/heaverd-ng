@@ -10,21 +10,23 @@ import (
 )
 
 var (
-	webListen     string
-	clusterListen string
+	webAddr  string
+	peerAddr string
+	etcdAddr string
 )
 
 func main() {
-	flag.StringVar(&webListen, "web-listen", "8081", "")
-	flag.StringVar(&clusterListen, "cluster-listen", "1444", "")
+	flag.StringVar(&webAddr, "web-addr", "8081", "")
+	flag.StringVar(&peerAddr, "peer-addr", "1444", "")
+	flag.StringVar(&etcdAddr, "etcd-addr", "4001", "")
 	flag.Parse()
 
 	log.SetFlags(log.Lshortfile | log.Ldate | log.Ltime)
 	log.SetPrefix("[heaverd-ng] ")
 
-	wg := sync.WaitGroup{}
+	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	go webserver.Start(webListen, clusterListen, time.Now().UnixNano())
-	go tracker.Start(clusterListen)
+	go webserver.Start(wg, webAddr, peerAddr, time.Now().UnixNano())
+	go tracker.Start(wg, peerAddr, etcdAddr)
 	wg.Wait()
 }

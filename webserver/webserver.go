@@ -2,7 +2,6 @@ package webserver
 
 import (
 	"bufio"
-	"crypto/md5"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,8 +9,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
-	"strconv"
-	"time"
+	"sync"
 
 	"heaverd-ng/libscore"
 	"heaverd-ng/tracker"
@@ -20,25 +18,21 @@ import (
 )
 
 type Context struct {
-	clusterListen string
+	peerAddr string
 }
 
-func Start(port string, clusterListen string, seed int64) {
+func Start(wg *sync.WaitGroup, webAddr string, peerAddr string, seed int64) {
 	rand.Seed(seed)
 
 	context := &Context{
-		clusterListen: clusterListen,
+		peerAddr: peerAddr,
 	}
 
 	router := web.New(Context{}).
 		Middleware(web.LoggerMiddleware).
 		Middleware(web.ShowErrorsMiddleware).
-
-		//http://confluence.rn/display/ENV/RESTful+API
-		//Common
 		Get("/", handleHelp).
 		Get("/stats/", handleStats).
-		//Hosts
 		Get("/h/", handleHostList).
 		Post("/h/:hid", handleHostOperation).
 		Get("/h/:hid", handleHostContainersList).
@@ -52,6 +46,7 @@ func Start(port string, clusterListen string, seed int64) {
 		Delete("/h/:hid/:cid", context.handleContainerDestroy).
 		Get("/h/:hid/:cid", handleContainerInfo).
 		Post("/h/:hid/:cid/start", context.handleContainerStart).
+		Post("/c/:cid/start", context.handleContainerStart).
 		Post("/h/:hid/:cid/stop", context.handleContainerStop).
 		//Post("/h/:hid/:cid/freeze", )
 		//Post("/h/:hid/:cid/unfreeze", )
@@ -59,8 +54,9 @@ func Start(port string, clusterListen string, seed int64) {
 		Get("/h/:hid/:cid/ping", handleContainerPing)
 	//Get("/h/:hid/:cid/attach", )
 
-	log.Println("started at port :", port)
-	log.Fatal(http.ListenAndServe(":"+port, router))
+	log.Println("started at port:", webAddr)
+	log.Fatal(http.ListenAndServe(":"+webAddr, router))
+	wg.Done()
 }
 
 func handleHelp(w web.ResponseWriter, r *web.Request) {
@@ -68,12 +64,13 @@ func handleHelp(w web.ResponseWriter, r *web.Request) {
 }
 
 func handleStats(w web.ResponseWriter, r *web.Request) {
-	cluster, _ := json.Marshal(tracker.Cluster())
-	fmt.Fprint(w, string(cluster))
+	stats, _ := json.Marshal(tracker.Hostinfo)
+	fmt.Fprint(w, string(stats))
 }
 
 func handleHostList(w web.ResponseWriter, r *web.Request) {
-	http.Error(w, "", 501)
+	cluster, _ := json.Marshal(tracker.Cluster())
+	fmt.Fprint(w, string(cluster))
 }
 
 func handleHostOperation(w web.ResponseWriter, r *web.Request) {
@@ -103,34 +100,6 @@ func handleHostInformationRequest(w web.ResponseWriter, r *web.Request) {
 func (c *Context) handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 	containerName := r.PathParams["cid"]
 
-	h := md5.New()
-	fmt.Fprint(h, containerName+strconv.FormatInt(time.Now().Unix(), 10))
-	intentId := fmt.Sprintf("%x", h.Sum(nil))
-
-	intentMessage, _ := json.Marshal(struct {
-		Type string
-		Body interface{}
-	}{
-		"container-create-intent",
-		tracker.Intent{
-			Id:            intentId,
-			ContainerName: containerName,
-		},
-	})
-
-	for _, host := range tracker.Cluster() {
-		nodeAnswer := sendTcpMessage(host.Hostname+":"+c.clusterListen,
-			string(intentMessage))
-		switch nodeAnswer {
-		case "not_unique_name":
-			http.Error(w, "Not unique container name", 409)
-			return
-		case "intent_still_exists":
-			http.Error(w, "Intent still exists", 409)
-			return
-		}
-	}
-
 	targetHost, err := getPreferedHost(containerName)
 	if err != nil {
 		log.Println("[error]", err)
@@ -138,16 +107,18 @@ func (c *Context) handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 		return
 	}
 
-	createMessage, _ := json.Marshal(struct {
-		Type string
-		Body interface{}
-	}{
-		"container-create",
-		tracker.Intent{Id: intentId},
-	})
+	ready := tracker.CreateIntent(targetHost, containerName)
 
-	hostAnswer := sendTcpMessage(targetHost+":"+c.clusterListen, string(createMessage))
+	if ready != true {
+		logMessage := "Not unique container name"
+		log.Println(logMessage)
+		http.Error(w, logMessage, 502)
+		return
+	}
 
+	createMessage := makeMessage("container-create", containerName)
+
+	hostAnswer, _ := sendTcpMessage(targetHost+":"+c.peerAddr, createMessage)
 	http.Error(w, hostAnswer, 201)
 }
 
@@ -173,24 +144,19 @@ func (c *Context) handleContainerDestroy(w web.ResponseWriter, r *web.Request) {
 		return
 	}
 
-	controlMessage, _ := json.Marshal(struct {
-		Type string
-		Body interface{}
+	controlMessage := makeMessage("container-control", struct {
+		ContainerName string
+		Action        string
 	}{
-		"container-control",
-		struct {
-			ContainerName string
-			Action        string
-		}{
-			containerName,
-			"destroy",
-		},
+		containerName,
+		"destroy",
 	})
 
-	switch sendTcpMessage(hostname+":"+c.clusterListen, string(controlMessage)) {
-	case "true":
+	answer, _ := sendTcpMessage(hostname+":"+c.peerAddr, controlMessage)
+	switch answer {
+	case "done":
 		http.Error(w, "", 204)
-	case "false":
+	case "not_done":
 		http.Error(w, "Not destroyed", 504)
 	}
 }
@@ -200,8 +166,18 @@ func handleContainerInfo(w web.ResponseWriter, r *web.Request) {
 }
 
 func (c *Context) handleContainerStart(w web.ResponseWriter, r *web.Request) {
-	hostname := r.PathParams["hid"]
+	var hostname string
 	containerName := r.PathParams["cid"]
+
+	if _, ok := r.PathParams["hid"]; ok {
+		hostname = r.PathParams["hid"]
+	} else {
+		hostname = getHostnameByContainer(containerName)
+		if hostname == "" {
+			http.Error(w, "Unknown container", 404)
+			return
+		}
+	}
 
 	if !checkHostname(hostname) {
 		http.Error(w, "Unknown host", 404)
@@ -213,24 +189,19 @@ func (c *Context) handleContainerStart(w web.ResponseWriter, r *web.Request) {
 		return
 	}
 
-	controlMessage, _ := json.Marshal(struct {
-		Type string
-		Body interface{}
+	controlMessage := makeMessage("container-control", struct {
+		ContainerName string
+		Action        string
 	}{
-		"container-control",
-		struct {
-			ContainerName string
-			Action        string
-		}{
-			containerName,
-			"start",
-		},
+		containerName,
+		"start",
 	})
 
-	switch sendTcpMessage(hostname+":"+c.clusterListen, string(controlMessage)) {
-	case "true":
+	answer, _ := sendTcpMessage(hostname+":"+c.peerAddr, controlMessage)
+	switch answer {
+	case "done":
 		http.Error(w, "", 204)
-	case "false":
+	case "not done":
 		http.Error(w, "Not started", 502)
 	}
 }
@@ -249,24 +220,19 @@ func (c *Context) handleContainerStop(w web.ResponseWriter, r *web.Request) {
 		return
 	}
 
-	controlMessage, _ := json.Marshal(struct {
-		Type string
-		Body interface{}
+	controlMessage := makeMessage("container-control", struct {
+		ContainerName string
+		Action        string
 	}{
-		"container-control",
-		struct {
-			ContainerName string
-			Action        string
-		}{
-			containerName,
-			"stop",
-		},
+		containerName,
+		"stop",
 	})
 
-	switch sendTcpMessage(hostname+":"+c.clusterListen, string(controlMessage)) {
-	case "true":
+	answer, _ := sendTcpMessage(hostname+":"+c.peerAddr, controlMessage)
+	switch answer {
+	case "done":
 		http.Error(w, "", 204)
-	case "false":
+	case "not_done":
 		http.Error(w, "Not stopped", 502)
 	}
 }
@@ -284,23 +250,20 @@ func getPreferedHost(containerName string) (string, error) {
 	return host, nil
 }
 
-func sendTcpMessage(target string, message string) string {
-	connection, err := net.Dial("tcp", target)
+func sendTcpMessage(host string, message string) (string, error) {
+	connection, err := net.Dial("tcp", host)
 	defer connection.Close()
 	if err != nil {
-		log.Println("[error]", err)
+		return "", err
 	}
-
 	fmt.Fprint(connection, message)
-
 	answer, err := bufio.NewReader(connection).ReadString('\n')
 	if err != nil {
 		if err != io.EOF {
-			log.Println("[error]", err)
+			return "", err
 		}
 	}
-
-	return string(answer)
+	return string(answer), nil
 }
 
 func checkHostname(name string) bool {
@@ -315,4 +278,24 @@ func checkContainer(hostname string, name string) bool {
 		return false
 	}
 	return true
+}
+
+func getHostnameByContainer(containerName string) string {
+	for hostname, host := range tracker.Cluster() {
+		if _, ok := host.Containers[containerName]; ok {
+			return hostname
+		}
+	}
+	return ""
+}
+
+func makeMessage(header string, body interface{}) string {
+	message, _ := json.Marshal(struct {
+		Type string
+		Body interface{}
+	}{
+		header,
+		body,
+	})
+	return string(message)
 }
