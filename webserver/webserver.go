@@ -28,7 +28,7 @@ func Start(wg *sync.WaitGroup, webAddr string, peerAddr string, seed int64) {
 		peerAddr: peerAddr,
 	}
 
-	router := web.New(Context{}).
+	api := web.NewWithPrefix(Context{}, "/v2").
 		Middleware(web.LoggerMiddleware).
 		Middleware(web.ShowErrorsMiddleware).
 		Get("/", handleHelp).
@@ -55,7 +55,8 @@ func Start(wg *sync.WaitGroup, webAddr string, peerAddr string, seed int64) {
 	//Get("/h/:hid/:cid/attach", )
 
 	log.Println("started at port:", webAddr)
-	log.Fatal(http.ListenAndServe(":"+webAddr, router))
+
+	log.Fatal(http.ListenAndServe(":"+webAddr, api))
 	wg.Done()
 }
 
