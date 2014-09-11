@@ -31,7 +31,7 @@ func Start(wg *sync.WaitGroup, port string, etcdPort string) {
 	log.Println("started at port :", port)
 	go messageListening(listener)
 
-	etcdc = etcd.NewClient([]string{"http://localhost:" + etcdPort})
+	etcdc = getEtcdClient(etcdPort)
 	_, err = etcdc.CreateDir("hosts/", 0)
 	_, err = etcdc.CreateDir("containers/", 0)
 
@@ -39,6 +39,7 @@ func Start(wg *sync.WaitGroup, port string, etcdPort string) {
 		err = hostinfoUpdate()
 		if err != nil {
 			log.Println("[error]", err)
+			etcdc = getEtcdClient(etcdPort)
 		}
 		time.Sleep(time.Second)
 	}
@@ -171,6 +172,8 @@ func createContainer(name string) (string, error) {
 		log.Println("[error]", err)
 	}
 
+	log.Println("container", name, "created")
+
 	result, _ := json.Marshal(created)
 	return string(result), nil
 }
@@ -196,4 +199,8 @@ func hostinfoUpdate() error {
 	}
 
 	return nil
+}
+
+func getEtcdClient(etcdPort string) *etcd.Client {
+	return etcd.NewClient([]string{"http://localhost:" + etcdPort})
 }

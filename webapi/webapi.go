@@ -1,15 +1,18 @@
-package webserver
+package webapi
 
 import (
 	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"net"
 	"net/http"
+	"os"
 	"sync"
+	"text/template"
 
 	"heaverd-ng/libscore"
 	"heaverd-ng/tracker"
@@ -28,16 +31,19 @@ func Start(wg *sync.WaitGroup, webAddr string, peerAddr string, seed int64) {
 		peerAddr: peerAddr,
 	}
 
-	api := web.NewWithPrefix(Context{}, "/v2").
+	root := web.New(Context{}).
 		Middleware(web.LoggerMiddleware).
 		Middleware(web.ShowErrorsMiddleware).
+		Middleware(web.StaticMiddleware("www")).
+		Get("/score", handleScore)
+
+	root.Subrouter(Context{}, "/v2").
 		Get("/", handleHelp).
 		Get("/stats/", handleStats).
 		Get("/h/", handleHostList).
 		Post("/h/:hid", handleHostOperation).
 		Get("/h/:hid", handleHostContainersList).
 		Get("/h/:hid/ping", handleHostPing).
-		//Containers
 		Get("/c/", handleClusterContainersList).
 		Get("/c/:cid", handleHostByContainer).
 		Post("/c/:cid", context.handleContainerCreate).
@@ -56,8 +62,28 @@ func Start(wg *sync.WaitGroup, webAddr string, peerAddr string, seed int64) {
 
 	log.Println("started at port:", webAddr)
 
-	log.Fatal(http.ListenAndServe(":"+webAddr, api))
+	log.Fatal(http.ListenAndServe(":"+webAddr, root))
 	wg.Done()
+}
+
+func handleScore(w web.ResponseWriter, r *web.Request) {
+	content := struct {
+		Score string
+	}{}
+
+	var score string
+
+	for _, segment := range libscore.Segments(tracker.Cluster()) {
+		score = score + fmt.Sprintf("{y:%v,name:\"%v\"},", segment.Score,
+			segment.Hostname)
+	}
+	content.Score = fmt.Sprintf("[%v]", score)
+
+	r.Header.Set("Content-Type", "text/html")
+	f, _ := os.Open("www/templates/index.tpl")
+	raw, _ := ioutil.ReadAll(f)
+	tpl := template.Must(template.New("index").Parse(string(raw)))
+	tpl.Execute(w, content)
 }
 
 func handleHelp(w web.ResponseWriter, r *web.Request) {
@@ -68,7 +94,6 @@ func handleStats(w web.ResponseWriter, r *web.Request) {
 	stats, _ := json.Marshal(tracker.Hostinfo)
 	fmt.Fprint(w, string(stats))
 }
-
 func handleHostList(w web.ResponseWriter, r *web.Request) {
 	cluster, _ := json.Marshal(tracker.Cluster())
 	fmt.Fprint(w, string(cluster))

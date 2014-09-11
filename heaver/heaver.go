@@ -73,7 +73,7 @@ func Control(containerName string, action string) bool {
 		return false
 	}
 
-	log.Println(containerName, action)
+	log.Println("container", containerName, matches[0])
 
 	return true
 }

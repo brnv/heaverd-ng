@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"heaverd-ng/tracker"
-	"heaverd-ng/webserver"
+	"heaverd-ng/webapi"
 	"log"
 	"sync"
 	"time"
@@ -26,7 +26,7 @@ func main() {
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	go webserver.Start(wg, webAddr, peerAddr, time.Now().UnixNano())
+	go webapi.Start(wg, webAddr, peerAddr, time.Now().UnixNano())
 	go tracker.Start(wg, peerAddr, etcdAddr)
 	wg.Wait()
 }
