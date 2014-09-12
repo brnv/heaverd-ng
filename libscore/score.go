@@ -69,27 +69,31 @@ func ChooseHost(containerName string, segments []Segment) (host string, err erro
 
 func calculateHostScore(host Hostinfo, profile Profile) float64 {
 	cpuWeight := 1.0 - minNorm(host.CpuUsage, host.CpuCapacity-profile.ReservedCPU)
-	diskWeight := 1.0 - minNorm(int(float32(host.DiskCapacity)*profile.ReservedDiskCapacity), host.DiskUsage)
-	ramWeight := 1 - minNorm(host.RamUsage, host.RamCapacity-(host.ZfsArcMax/1024)-profile.ReservedRAM)
-	uptimeFactor := 2 * math.Atan(float64(host.Uptime)/float64(profile.UptimeFactor)) / math.Pi
+
+	diskWeight := 1.0 - minNorm(int(
+		float32(host.DiskCapacity)*profile.ReservedDiskCapacity),
+		host.DiskFree)
+
+	ramWeight := 1 - minNorm(host.RamFree,
+		host.RamCapacity-(host.ZfsArcMax/1024)-profile.ReservedRAM)
+
+	uptimeFactor := 2 * math.Atan(float64(host.Uptime)/
+		float64(profile.UptimeFactor)) / math.Pi
+
 	speedFactor := 1 - 2*math.Atan(math.Max(0, float64(host.ControlOpTime-
 		profile.SlowOpThreshold))/float64(profile.LagReactionSpeed))
 
-	// TODO	пока на хосте lxbox и yapa исключил этот параметр
-	ramWeight = 1
 	score := cpuWeight * diskWeight * ramWeight * speedFactor * uptimeFactor
 
 	return score
 }
 
 func minNorm(a, b int) float64 {
-	var min int
 	if a < b {
-		min = a
+		return float64(a) / float64(b)
 	} else {
-		min = b
+		return 1.0
 	}
-	return float64(min) / float64(b)
 }
 
 func hash(input string) float64 {

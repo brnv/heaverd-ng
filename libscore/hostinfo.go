@@ -12,9 +12,9 @@ type Hostinfo struct {
 	Hostname      string
 	CpuUsage      int
 	CpuCapacity   int
-	DiskUsage     int
+	DiskFree      int
 	DiskCapacity  int
-	RamUsage      int
+	RamFree       int
 	RamCapacity   int
 	ZfsArcMax     int
 	ControlOpTime int
@@ -41,7 +41,7 @@ func (host *Hostinfo) Refresh() error {
 		return err
 	}
 	cpuUsage = (cpuUsage + host.CpuUsage) / 2
-	diskCapacity, diskUsage, err := linux.Disk()
+	diskCapacity, diskFree, err := linux.Disk()
 	if err != nil {
 		return err
 	}
@@ -65,9 +65,9 @@ func (host *Hostinfo) Refresh() error {
 		Hostname:      hostname,
 		CpuUsage:      cpuUsage,
 		CpuCapacity:   cpuCapacity,
-		DiskUsage:     diskUsage,
+		DiskFree:      diskFree,
 		DiskCapacity:  diskCapacity,
-		RamUsage:      ramUsage,
+		RamFree:       ramUsage,
 		RamCapacity:   ramCapacity,
 		ZfsArcMax:     zfsArcMax,
 		ControlOpTime: controlOpTime,

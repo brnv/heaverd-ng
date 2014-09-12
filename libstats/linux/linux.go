@@ -1,8 +1,6 @@
 package linux
 
 import (
-	"errors"
-	"fmt"
 	"heaverd-ng/libstats/lxc"
 	"net"
 	"os"
@@ -38,7 +36,7 @@ func startCpuMeasure() CPUMeasure {
 				ch.err <- err
 				continue
 			}
-			usage := ticksBeforeSleep - ticksAfterSleep
+			usage := ticksAfterSleep - ticksBeforeSleep
 			ch.usage <- usage
 		}
 	}()
@@ -64,12 +62,7 @@ func Memory() (capacity int, usage int, err error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	usage = capacity - free
-	if usage < 0 {
-		return 0, 0, errors.New(
-			fmt.Sprintf("Free memory value is bigger than total capacity"))
-	}
-	return capacity, usage, nil
+	return capacity, free, nil
 }
 
 func Cpu() (capacity int, usage int, err error) {
@@ -82,7 +75,7 @@ func Cpu() (capacity int, usage int, err error) {
 	return capacity, usage, nil
 }
 
-func Disk() (capacity int, usage int, err error) {
+func Disk() (capacity int, free int, err error) {
 	cmd := exec.Command("df", "-P", "/")
 	out, err := cmd.Output()
 	if err != nil {
@@ -92,11 +85,11 @@ func Disk() (capacity int, usage int, err error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	usage, err = strconv.Atoi(strings.Fields(string(out))[10])
+	free, err = strconv.Atoi(strings.Fields(string(out))[10])
 	if err != nil {
 		return 0, 0, err
 	}
-	return capacity, usage, nil
+	return capacity, free, nil
 }
 
 func Uptime() (uptime int64, err error) {

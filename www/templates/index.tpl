@@ -31,7 +31,7 @@
 </head>
 <body>
     <content>
-		<div id="scoreContainer" style="height: 300px; width: 100%;"></div>
+		<div id="scoreContainer" style="height: 600px; width: 100%;"></div>
     </content>
 </body>
 </html>
