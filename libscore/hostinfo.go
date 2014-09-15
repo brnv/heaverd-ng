@@ -17,10 +17,15 @@ type Hostinfo struct {
 	RamFree       int
 	RamCapacity   int
 	ZfsArcMax     int
+	ZfsArcCurrent int
 	ControlOpTime int
 	Uptime        int64
 	NetAddr       []string
+	CpuWeight     float64
+	DiskWeight    float64
+	RamWeight     float64
 	Containers    map[string]lxc.Container
+	Score         float64
 }
 
 func (host *Hostinfo) Refresh() error {
@@ -36,6 +41,10 @@ func (host *Hostinfo) Refresh() error {
 	if err != nil {
 		return err
 	}
+	zfsArcCurrent, err := zfs.ArcCurrent()
+	if err != nil {
+		return err
+	}
 	cpuCapacity, cpuUsage, err := linux.Cpu()
 	if err != nil {
 		return err
@@ -45,7 +54,7 @@ func (host *Hostinfo) Refresh() error {
 	if err != nil {
 		return err
 	}
-	ramCapacity, ramUsage, err := linux.Memory()
+	ramCapacity, ramFree, err := linux.Memory()
 	if err != nil {
 		return err
 	}
@@ -67,14 +76,20 @@ func (host *Hostinfo) Refresh() error {
 		CpuCapacity:   cpuCapacity,
 		DiskFree:      diskFree,
 		DiskCapacity:  diskCapacity,
-		RamFree:       ramUsage,
+		RamFree:       ramFree,
 		RamCapacity:   ramCapacity,
 		ZfsArcMax:     zfsArcMax,
+		ZfsArcCurrent: zfsArcCurrent,
 		ControlOpTime: controlOpTime,
 		Uptime:        uptime,
 		NetAddr:       netAddr,
+		CpuWeight:     CpuWeight(cpuUsage, cpuCapacity, DefaultProfile),
+		DiskWeight:    DiskWeight(diskFree, diskCapacity, DefaultProfile),
+		RamWeight:     RamWeight(ramFree, ramCapacity, zfsArcMax, zfsArcCurrent, DefaultProfile),
 		Containers:    containers,
 	}
+
+	host.Score = Score(*host, DefaultProfile)
 
 	return nil
 }

@@ -43,7 +43,7 @@ func startCpuMeasure() CPUMeasure {
 	return ch
 }
 
-func Memory() (capacity int, usage int, err error) {
+func Memory() (capacity int, free int, err error) {
 	cmd := exec.Command("grep", "MemTotal", "/proc/meminfo")
 	out, err := cmd.Output()
 	if err != nil {
@@ -58,10 +58,20 @@ func Memory() (capacity int, usage int, err error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	free, err := strconv.Atoi(strings.Fields(string(out))[1])
+	free, err = strconv.Atoi(strings.Fields(string(out))[1])
 	if err != nil {
 		return 0, 0, err
 	}
+	cmd = exec.Command("grep", "Cached", "/proc/meminfo")
+	out, err = cmd.Output()
+	if err != nil {
+		return 0, 0, err
+	}
+	cached, err := strconv.Atoi(strings.Fields(string(out))[1])
+	if err != nil {
+		return 0, 0, err
+	}
+	free = free + cached
 	return capacity, free, nil
 }
 

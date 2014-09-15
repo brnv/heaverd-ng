@@ -42,8 +42,11 @@ func Segments(hosts map[string]Hostinfo) []Segment {
 	segments := []Segment{}
 	scoreSum := 0.0
 	for _, host := range hosts {
-		score := calculateHostScore(host, DefaultProfile)
-		segments = append(segments, Segment{Hostname: host.Hostname, Score: score})
+		score := Score(host, DefaultProfile)
+		segments = append(segments, Segment{
+			Hostname: host.Hostname,
+			Score:    score,
+		})
 		scoreSum += score
 	}
 	sort.Sort(HostsRange(segments))
@@ -67,25 +70,35 @@ func ChooseHost(containerName string, segments []Segment) (host string, err erro
 		fmt.Sprintf("Cannot assign any host to container name %v", containerName))
 }
 
-func calculateHostScore(host Hostinfo, profile Profile) float64 {
-	cpuWeight := 1.0 - minNorm(host.CpuUsage, host.CpuCapacity-profile.ReservedCPU)
-
-	diskWeight := 1.0 - minNorm(int(
-		float32(host.DiskCapacity)*profile.ReservedDiskCapacity),
-		host.DiskFree)
-
-	ramWeight := 1 - minNorm(host.RamFree,
-		host.RamCapacity-(host.ZfsArcMax/1024)-profile.ReservedRAM)
-
+func Score(host Hostinfo, profile Profile) float64 {
 	uptimeFactor := 2 * math.Atan(float64(host.Uptime)/
 		float64(profile.UptimeFactor)) / math.Pi
 
 	speedFactor := 1 - 2*math.Atan(math.Max(0, float64(host.ControlOpTime-
 		profile.SlowOpThreshold))/float64(profile.LagReactionSpeed))
 
-	score := cpuWeight * diskWeight * ramWeight * speedFactor * uptimeFactor
+	score := host.CpuWeight * host.DiskWeight * host.RamWeight * speedFactor * uptimeFactor
 
 	return score
+}
+
+func CpuWeight(cpuUsage int, cpuCapacity int, profile Profile) float64 {
+	return 1.0 - minNorm(cpuUsage, cpuCapacity-profile.ReservedCPU)
+}
+
+func DiskWeight(diskFree int, diskCapacity int, profile Profile) float64 {
+	return minNorm(diskFree,
+		int(float32(diskCapacity)*(1-profile.ReservedDiskCapacity)))
+}
+
+func RamWeight(ramFree int, ramCapacity int,
+	zfsArcMax int, zfsArcCurrent int, profile Profile) float64 {
+	realFree := ramFree - (zfsArcMax - zfsArcCurrent)
+	if realFree < 0 {
+		return 0
+	}
+	realCapacity := ramCapacity - zfsArcMax
+	return minNorm(realFree, realCapacity-profile.ReservedRAM)
 }
 
 func minNorm(a, b int) float64 {

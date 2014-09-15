@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"regexp"
 	"sync"
 	"text/template"
 
@@ -73,9 +74,15 @@ func handleScore(w web.ResponseWriter, r *web.Request) {
 
 	var score string
 
-	for _, segment := range libscore.Segments(tracker.Cluster()) {
-		score = score + fmt.Sprintf("{y:%v,name:\"%v\"},", segment.Score,
-			segment.Hostname)
+	for _, host := range tracker.Cluster() {
+		shortName := regexp.MustCompile("([\\w]+).").FindStringSubmatch(
+			host.Hostname)
+		if shortName != nil {
+			host.Hostname = shortName[1]
+		}
+		score = score + fmt.Sprintf("{containersCount:%v,y:%v,name:\"%v\"},",
+			len(host.Containers), host.Score,
+			host.Hostname)
 	}
 	content.Score = fmt.Sprintf("[%v]", score)
 
@@ -94,7 +101,9 @@ func handleStats(w web.ResponseWriter, r *web.Request) {
 	stats, _ := json.Marshal(tracker.Hostinfo)
 	fmt.Fprint(w, string(stats))
 }
+
 func handleHostList(w web.ResponseWriter, r *web.Request) {
+	r.Header.Set("Content-Type", "application/json")
 	cluster, _ := json.Marshal(tracker.Cluster())
 	fmt.Fprint(w, string(cluster))
 }

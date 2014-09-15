@@ -18,7 +18,7 @@
 				{
 					type: "pie",
 					toolTipContent: "{name}: {y}",
-					indexLabel: "{name} #percent%", 
+					indexLabel: "({containersCount}) {name} #percent%",
 					dataPoints: {{.Score}}
 				}
 			],
@@ -31,7 +31,7 @@
 </head>
 <body>
     <content>
-		<div id="scoreContainer" style="height: 600px; width: 100%;"></div>
+		<div id="scoreContainer" style="height: 100%;"></div>
     </content>
 </body>
 </html>
