@@ -39,25 +39,25 @@ func Start(wg *sync.WaitGroup, webAddr string, peerAddr string, seed int64) {
 
 	root.Subrouter(Context{}, "/v2").
 		Get("/", handleHelp).
-		Get("/stats/", handleStats).
+		Get("/h/:hid/stats", handleStats).
 		Get("/h/", handleHostList).
+		Post("/c/:cid", context.handleContainerCreate).
+		Delete("/h/:hid/:cid", context.handleContainerDestroy).
+		Post("/h/:hid/:cid/start", context.handleContainerStart).
+		Post("/c/:cid/start", context.handleContainerStart).
+		Post("/h/:hid/:cid/stop", context.handleContainerStop).
 		Post("/h/:hid", handleHostOperation).
 		Get("/h/:hid", handleHostContainersList).
 		Get("/h/:hid/ping", handleHostPing).
 		Get("/c/", handleClusterContainersList).
 		Get("/c/:cid", handleHostByContainer).
-		Post("/c/:cid", context.handleContainerCreate).
 		Post("/h/:hid/:cid", handleHostContainerCreate).
 		Put("/h/:hid/:cid", handleHostContainerUpdate).
-		Delete("/h/:hid/:cid", context.handleContainerDestroy).
 		Get("/h/:hid/:cid", handleContainerInfo).
-		Post("/h/:hid/:cid/start", context.handleContainerStart).
-		Post("/c/:cid/start", context.handleContainerStart).
-		Post("/h/:hid/:cid/stop", context.handleContainerStop).
-		//Post("/h/:hid/:cid/freeze", )
-		//Post("/h/:hid/:cid/unfreeze", )
-		//Get("/h/:hid/:cid/tarball", )
 		Get("/h/:hid/:cid/ping", handleContainerPing)
+	//Post("/h/:hid/:cid/freeze", ).
+	//Post("/h/:hid/:cid/unfreeze", ).
+	//Get("/h/:hid/:cid/tarball", ).
 	//Get("/h/:hid/:cid/attach", )
 
 	log.Println("started at port:", webAddr)
@@ -77,7 +77,13 @@ func handleHelp(w web.ResponseWriter, r *web.Request) {
 }
 
 func handleStats(w web.ResponseWriter, r *web.Request) {
-	stats, _ := json.Marshal(tracker.Hostinfo)
+	hostname := r.PathParams["hid"]
+	stats := []byte{}
+	if hostname == "" {
+		stats, _ = json.Marshal(tracker.Hostinfo)
+	} else {
+		stats, _ = json.Marshal(tracker.Cluster()[hostname])
+	}
 	fmt.Fprint(w, string(stats))
 }
 

@@ -9,7 +9,7 @@
 
 	<script type="text/javascript" charset="utf-8">
 		jQuery.ajax({
-			url: "http://yaci.yard.s:8081/v2/h",
+			url: "http://container.s:8081/v2/h",
 			success: function(data){
 				hosts = jQuery.parseJSON(data);
 				render(hosts);
