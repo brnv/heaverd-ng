@@ -5,13 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"net"
 	"net/http"
-	"os"
-	"regexp"
 	"sync"
 	"text/template"
 
@@ -24,6 +21,8 @@ import (
 type Context struct {
 	peerAddr string
 }
+
+const templatesDir = "/mnt/a.baranov/www/templates/"
 
 func Start(wg *sync.WaitGroup, webAddr string, peerAddr string, seed int64) {
 	rand.Seed(seed)
@@ -68,29 +67,9 @@ func Start(wg *sync.WaitGroup, webAddr string, peerAddr string, seed int64) {
 }
 
 func handleScore(w web.ResponseWriter, r *web.Request) {
-	content := struct {
-		Score string
-	}{}
-
-	var score string
-
-	for _, host := range tracker.Cluster() {
-		shortName := regexp.MustCompile("([\\w]+).").FindStringSubmatch(
-			host.Hostname)
-		if shortName != nil {
-			host.Hostname = shortName[1]
-		}
-		score = score + fmt.Sprintf("{containersCount:%v,y:%v,name:\"%v\"},",
-			len(host.Containers), host.Score,
-			host.Hostname)
-	}
-	content.Score = fmt.Sprintf("[%v]", score)
-
 	r.Header.Set("Content-Type", "text/html")
-	f, _ := os.Open("www/templates/index.tpl")
-	raw, _ := ioutil.ReadAll(f)
-	tpl := template.Must(template.New("index").Parse(string(raw)))
-	tpl.Execute(w, content)
+	template.Must(template.
+		ParseFiles(templatesDir+"index.tpl")).Execute(w, nil)
 }
 
 func handleHelp(w web.ResponseWriter, r *web.Request) {
