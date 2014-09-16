@@ -18,13 +18,30 @@
 
 		function render(hosts) {
 			options = [];
+			weightThreshold = 0.4;
 
 			jQuery.each(hosts, function(hostname, info) {
 				option = {
 					count:Object.keys(info.Containers).length,
 					name: /(\w+)\./g.exec(hostname)[1],
-					y: info.Score
+					y: info.Score,
+					messages: [],
 				};
+				if (info.CpuWeight < weightThreshold) {
+					option.messages.push("cpu")
+				}
+				if (info.DiskWeight < weightThreshold) {
+					option.messages.push("disk")
+				}
+				if (info.RamWeight < weightThreshold) {
+					option.messages.push("ram")
+				}
+				if (option.messages.length > 0) {
+					option.messages[0] = "(low: " + option.messages[0]
+					option.messages[option.messages.length-1] =
+						option.messages[option.messages.length-1] + ")"
+				}
+
 				options.push(option);
 			})
 
@@ -40,7 +57,7 @@
 				data: [{
 					type: "pie",
 					toolTipContent: "{name}: {y}",
-					indexLabel: "({count}) {name} #percent%",
+					indexLabel: "({count}) {name} {messages} #percent%",
 					dataPoints: options
 				}],
 				animationEnabled: false,
