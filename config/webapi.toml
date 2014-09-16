@@ -1,0 +1,4 @@
+[web]
+Port = "8081"
+[templates]
+Dir = "/mnt/a.baranov/www/templates/"

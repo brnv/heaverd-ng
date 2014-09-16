@@ -7,18 +7,31 @@ import (
 	"log"
 	"sync"
 	"time"
+
+	"github.com/BurntSushi/toml"
 )
 
 var (
-	webAddr  string
-	peerAddr string
-	etcdAddr string
+	webApiConfig  = "config/webapi.toml"
+	trackerConfig = "config/tracker.toml"
 )
 
 func main() {
-	flag.StringVar(&webAddr, "web-addr", "8081", "")
-	flag.StringVar(&peerAddr, "peer-addr", "1444", "")
-	flag.StringVar(&etcdAddr, "etcd-addr", "4001", "")
+	if _, err := toml.DecodeFile(webApiConfig, &webapi.Conf); err != nil {
+		log.Fatal("[error]", err)
+	}
+	if _, err := toml.DecodeFile(trackerConfig, &tracker.Conf); err != nil {
+		log.Fatal("[error]", err)
+	}
+
+	log.Println("[error]", tracker.Conf)
+
+	flag.StringVar(&webapi.Conf.Web.Port, "web-addr",
+		webapi.Conf.Web.Port, "")
+	flag.StringVar(&tracker.Conf.Cluster.Port, "peer-addr",
+		tracker.Conf.Cluster.Port, "")
+	flag.StringVar(&tracker.Conf.Storage.Port, "etcd-addr",
+		tracker.Conf.Storage.Port, "")
 	flag.Parse()
 
 	log.SetFlags(log.Lshortfile | log.Ldate | log.Ltime)
@@ -26,7 +39,7 @@ func main() {
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	go webapi.Start(wg, webAddr, peerAddr, time.Now().UnixNano())
-	go tracker.Start(wg, peerAddr, etcdAddr)
+	go webapi.Start(wg, time.Now().UnixNano())
+	go tracker.Start(wg)
 	wg.Wait()
 }

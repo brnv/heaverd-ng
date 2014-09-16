@@ -21,25 +21,38 @@ var (
 	intentContainerStatus = "pending"
 )
 
-func Start(wg *sync.WaitGroup, port string, etcdPort string) {
-	listener, err := net.Listen("tcp", ":"+port)
+type Config struct {
+	Cluster struct {
+		Port string
+	} `toml:"cluster"`
+	Storage struct {
+		Port string
+	} `toml:"storage"`
+	Pools []string
+}
+
+var Conf Config
+
+func Start(wg *sync.WaitGroup) {
+	listener, err := net.Listen("tcp", ":"+Conf.Cluster.Port)
 	if err != nil {
 		log.Println("[error]", err)
 		wg.Done()
 	}
 
-	log.Println("started at port :", port)
+	log.Println("started at port:", Conf.Cluster.Port)
 	go messageListening(listener)
 
-	etcdc = getEtcdClient(etcdPort)
+	etcdc = getEtcdClient()
 	_, err = etcdc.CreateDir("hosts/", 0)
 	_, err = etcdc.CreateDir("containers/", 0)
+	log.Println("etcd port:", Conf.Storage.Port)
 
 	for {
 		err = hostinfoUpdate()
 		if err != nil {
 			log.Println("[error]", err)
-			etcdc = getEtcdClient(etcdPort)
+			etcdc = getEtcdClient()
 		}
 		time.Sleep(time.Second)
 	}
@@ -201,6 +214,6 @@ func hostinfoUpdate() error {
 	return nil
 }
 
-func getEtcdClient(etcdPort string) *etcd.Client {
-	return etcd.NewClient([]string{"http://localhost:" + etcdPort})
+func getEtcdClient() *etcd.Client {
+	return etcd.NewClient([]string{"http://localhost:" + Conf.Storage.Port})
 }

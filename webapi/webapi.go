@@ -22,13 +22,22 @@ type Context struct {
 	peerAddr string
 }
 
-const templatesDir = "/mnt/a.baranov/www/templates/"
+type Config struct {
+	Web struct {
+		Port string
+	} `toml:"web"`
+	Templates struct {
+		Dir string
+	} `toml:"templates"`
+}
 
-func Start(wg *sync.WaitGroup, webAddr string, peerAddr string, seed int64) {
+var Conf Config
+
+func Start(wg *sync.WaitGroup, seed int64) {
 	rand.Seed(seed)
 
 	context := &Context{
-		peerAddr: peerAddr,
+		peerAddr: tracker.Conf.Cluster.Port,
 	}
 
 	root := web.New(Context{}).
@@ -60,16 +69,15 @@ func Start(wg *sync.WaitGroup, webAddr string, peerAddr string, seed int64) {
 	//Get("/h/:hid/:cid/tarball", ).
 	//Get("/h/:hid/:cid/attach", )
 
-	log.Println("started at port:", webAddr)
+	log.Println("started at port:", Conf.Web.Port)
 
-	log.Fatal(http.ListenAndServe(":"+webAddr, root))
-	wg.Done()
+	log.Fatal(http.ListenAndServe(":"+Conf.Web.Port, root))
 }
 
 func handleScore(w web.ResponseWriter, r *web.Request) {
 	r.Header.Set("Content-Type", "text/html")
 	template.Must(template.
-		ParseFiles(templatesDir+"index.tpl")).Execute(w, nil)
+		ParseFiles(Conf.Templates.Dir+"/index.tpl")).Execute(w, nil)
 }
 
 func handleHelp(w web.ResponseWriter, r *web.Request) {
