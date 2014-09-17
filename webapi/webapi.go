@@ -37,6 +37,7 @@ func Start(wg *sync.WaitGroup, seed int64) {
 		Get("/h/:hid/stats", handleStats).
 		Get("/h/", handleHostList).
 		Post("/c/:cid", handleContainerCreate).
+		Post("/p/:poolid/:cid", handleContainerCreate).
 		Delete("/h/:hid/:cid", handleContainerDestroy).
 		Post("/h/:hid/:cid/start", handleContainerStart).
 		Post("/c/:cid/start", handleContainerStart).
@@ -113,9 +114,10 @@ func handleHostInformationRequest(w web.ResponseWriter, r *web.Request) {
 }
 
 func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
+	poolName := r.PathParams["poolid"]
 	containerName := r.PathParams["cid"]
 
-	targetHost, err := getPreferedHost(containerName)
+	targetHost, err := getPreferedHost(poolName, containerName)
 	if err != nil {
 		log.Println("[error]", err)
 		http.Error(w, fmt.Sprintf("%v", err), 502)
@@ -260,8 +262,8 @@ func handleContainerPing(w web.ResponseWriter, r *web.Request) {
 	http.Error(w, "Пингануть сервер", 501)
 }
 
-func getPreferedHost(containerName string) (string, error) {
-	segments := libscore.Segments(tracker.Cluster())
+func getPreferedHost(poolName string, containerName string) (string, error) {
+	segments := libscore.Segments(tracker.Cluster(poolName))
 	host, err := libscore.ChooseHost(containerName, segments)
 	if err != nil {
 		return "", err

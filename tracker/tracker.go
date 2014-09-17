@@ -26,6 +26,8 @@ var Config = zhash.NewHash()
 
 func Start(wg *sync.WaitGroup) {
 	port, _ := Config.GetString("cluster", "port")
+	pools, _ := Config.GetStringSlice("cluster", "pools")
+	Hostinfo.Pools = pools
 
 	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
@@ -69,7 +71,7 @@ func CreateIntent(targetHost string, containerName string) bool {
 	return true
 }
 
-func Cluster() map[string]libscore.Hostinfo {
+func Cluster(poolName ...string) map[string]libscore.Hostinfo {
 	result := make(map[string]libscore.Hostinfo)
 
 	hosts, err := etcdc.Get("hosts/", true, true)
@@ -84,7 +86,15 @@ func Cluster() map[string]libscore.Hostinfo {
 		if err != nil {
 			log.Println("[error]", err)
 		}
-		result[host.Hostname] = host
+		if poolName != nil && poolName[0] != "" {
+			for _, h := range host.Pools {
+				if h == poolName[0] {
+					result[host.Hostname] = host
+				}
+			}
+		} else {
+			result[host.Hostname] = host
+		}
 	}
 
 	return result
@@ -123,7 +133,8 @@ func messageListening(listener net.Listener) {
 				result, err := createContainer(containerName)
 				if err != nil {
 					log.Println("[error]", err)
-					fmt.Fprintf(messageSocket, fmt.Sprintf("%v", err))
+					fmt.Fprintf(messageSocket, "Heaver error, check logs on "+
+						Hostinfo.Hostname)
 					return
 				}
 				fmt.Fprintf(messageSocket, result)
@@ -171,15 +182,17 @@ func createContainer(name string) (string, error) {
 		return "", err
 	}
 
-	created := heaver.Create(name)
+	created, err := heaver.Create(name)
+	if err != nil {
+		return "", err
+	}
+
 	created.Host = Hostinfo.Hostname
 
 	err = hostinfoUpdate()
 	if err != nil {
 		log.Println("[error]", err)
 	}
-
-	log.Println("container", name, "created")
 
 	result, _ := json.Marshal(created)
 	return string(result), nil

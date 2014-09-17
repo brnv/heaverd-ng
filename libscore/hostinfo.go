@@ -24,8 +24,9 @@ type Hostinfo struct {
 	CpuWeight     float64
 	DiskWeight    float64
 	RamWeight     float64
-	Containers    map[string]lxc.Container
 	Score         float64
+	Pools         []string
+	Containers    map[string]lxc.Container
 }
 
 func (host *Hostinfo) Refresh() error {
@@ -87,6 +88,7 @@ func (host *Hostinfo) Refresh() error {
 		DiskWeight:    DiskWeight(diskFree, diskCapacity, DefaultProfile),
 		RamWeight:     RamWeight(ramFree, ramCapacity, zfsArcMax, zfsArcCurrent, DefaultProfile),
 		Containers:    containers,
+		Pools:         host.Pools,
 	}
 
 	host.Score = Score(*host, DefaultProfile)

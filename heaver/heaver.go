@@ -1,6 +1,7 @@
 package heaver
 
 import (
+	"errors"
 	"heaverd-ng/libstats/lxc"
 	"log"
 	"os/exec"
@@ -21,15 +22,13 @@ var (
 	reList      = regexp.MustCompile(`\s*([\d\w-\.]*):\s([a-z]*).*:\s([\d\.]*)/`)
 )
 
-func Create(containerName string) lxc.Container {
+func Create(containerName string) (lxc.Container, error) {
 	createArgs[2] = containerName
 
 	cmd := getHeaverCmd(createArgs)
 	output, err := cmd.Output()
 	if err != nil {
-		log.Println("[error]", err)
-		log.Println("[error] cmd was", cmd)
-		return lxc.Container{}
+		return lxc.Container{Status: "error"}, errors.New(string(output))
 	}
 
 	ip := ""
@@ -44,7 +43,7 @@ func Create(containerName string) lxc.Container {
 		Ip:     ip,
 	}
 
-	return container
+	return container, nil
 }
 
 func Control(containerName string, action string) bool {
