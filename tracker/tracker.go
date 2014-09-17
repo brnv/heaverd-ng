@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-etcd/etcd"
+	"github.com/zazab/zhash"
 )
 
 var (
@@ -21,32 +22,25 @@ var (
 	intentContainerStatus = "pending"
 )
 
-type Config struct {
-	Cluster struct {
-		Port string
-	} `toml:"cluster"`
-	Storage struct {
-		Port string
-	} `toml:"storage"`
-	Pools []string
-}
-
-var Conf Config
+var Config = zhash.NewHash()
 
 func Start(wg *sync.WaitGroup) {
-	listener, err := net.Listen("tcp", ":"+Conf.Cluster.Port)
+	port, _ := Config.GetString("cluster", "port")
+
+	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		log.Println("[error]", err)
 		wg.Done()
 	}
 
-	log.Println("started at port:", Conf.Cluster.Port)
+	log.Println("started at port:", port)
 	go messageListening(listener)
 
 	etcdc = getEtcdClient()
 	_, err = etcdc.CreateDir("hosts/", 0)
 	_, err = etcdc.CreateDir("containers/", 0)
-	log.Println("etcd port:", Conf.Storage.Port)
+	etcdPort, _ := Config.GetString("etcd", "port")
+	log.Println("etcd port:", etcdPort)
 
 	for {
 		err = hostinfoUpdate()
@@ -215,5 +209,6 @@ func hostinfoUpdate() error {
 }
 
 func getEtcdClient() *etcd.Client {
-	return etcd.NewClient([]string{"http://localhost:" + Conf.Storage.Port})
+	port, _ := Config.GetString("etcd", "port")
+	return etcd.NewClient([]string{"http://localhost:" + port})
 }

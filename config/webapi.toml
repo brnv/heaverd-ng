@@ -1,4 +1,4 @@
 [web]
-Port = "8081"
+port = "8081"
 [templates]
-Dir = "/mnt/a.baranov/www/templates/"
+dir = "/mnt/a.baranov/www/templates/"

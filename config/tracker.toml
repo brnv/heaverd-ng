@@ -1,7 +1,5 @@
 [cluster]
-Port = "1444"
-
-[storage]
-Port = "4001"
-
-Pools = ["dev", "test"]
+port = "1444"
+pools = ["dev", "test"]
+[etcd]
+port = "4001"

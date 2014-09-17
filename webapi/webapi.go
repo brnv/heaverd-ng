@@ -16,29 +16,15 @@ import (
 	"heaverd-ng/tracker"
 
 	"github.com/gocraft/web"
+	"github.com/zazab/zhash"
 )
 
-type Context struct {
-	peerAddr string
-}
+var Config = zhash.NewHash()
 
-type Config struct {
-	Web struct {
-		Port string
-	} `toml:"web"`
-	Templates struct {
-		Dir string
-	} `toml:"templates"`
-}
-
-var Conf Config
+type Context struct{}
 
 func Start(wg *sync.WaitGroup, seed int64) {
 	rand.Seed(seed)
-
-	context := &Context{
-		peerAddr: tracker.Conf.Cluster.Port,
-	}
 
 	root := web.New(Context{}).
 		Middleware(web.LoggerMiddleware).
@@ -50,11 +36,11 @@ func Start(wg *sync.WaitGroup, seed int64) {
 		Get("/", handleHelp).
 		Get("/h/:hid/stats", handleStats).
 		Get("/h/", handleHostList).
-		Post("/c/:cid", context.handleContainerCreate).
-		Delete("/h/:hid/:cid", context.handleContainerDestroy).
-		Post("/h/:hid/:cid/start", context.handleContainerStart).
-		Post("/c/:cid/start", context.handleContainerStart).
-		Post("/h/:hid/:cid/stop", context.handleContainerStop).
+		Post("/c/:cid", handleContainerCreate).
+		Delete("/h/:hid/:cid", handleContainerDestroy).
+		Post("/h/:hid/:cid/start", handleContainerStart).
+		Post("/c/:cid/start", handleContainerStart).
+		Post("/h/:hid/:cid/stop", handleContainerStop).
 		Post("/h/:hid", handleHostOperation).
 		Get("/h/:hid", handleHostContainersList).
 		Get("/h/:hid/ping", handleHostPing).
@@ -69,15 +55,16 @@ func Start(wg *sync.WaitGroup, seed int64) {
 	//Get("/h/:hid/:cid/tarball", ).
 	//Get("/h/:hid/:cid/attach", )
 
-	log.Println("started at port:", Conf.Web.Port)
-
-	log.Fatal(http.ListenAndServe(":"+Conf.Web.Port, root))
+	port, _ := Config.GetString("web", "port")
+	log.Println("started at port:", port)
+	log.Fatal(http.ListenAndServe(":"+port, root))
 }
 
 func handleScore(w web.ResponseWriter, r *web.Request) {
 	r.Header.Set("Content-Type", "text/html")
+	templates, _ := Config.GetString("templates", "dir")
 	template.Must(template.
-		ParseFiles(Conf.Templates.Dir+"/index.tpl")).Execute(w, nil)
+		ParseFiles(templates+"/index.tpl")).Execute(w, nil)
 }
 
 func handleHelp(w web.ResponseWriter, r *web.Request) {
@@ -125,7 +112,7 @@ func handleHostInformationRequest(w web.ResponseWriter, r *web.Request) {
 	http.Error(w, "Полная информация о хосте", 501)
 }
 
-func (c *Context) handleContainerCreate(w web.ResponseWriter, r *web.Request) {
+func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 	containerName := r.PathParams["cid"]
 
 	targetHost, err := getPreferedHost(containerName)
@@ -146,7 +133,8 @@ func (c *Context) handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 
 	createMessage := makeMessage("container-create", containerName)
 
-	hostAnswer, _ := sendTcpMessage(targetHost+":"+c.peerAddr, createMessage)
+	peerAddr, _ := tracker.Config.GetString("cluster", "port")
+	hostAnswer, _ := sendTcpMessage(targetHost+":"+peerAddr, createMessage)
 	http.Error(w, hostAnswer, 201)
 }
 
@@ -158,7 +146,7 @@ func handleHostContainerUpdate(w web.ResponseWriter, r *web.Request) {
 	http.Error(w, "Обновить настройки контейнера", 501)
 }
 
-func (c *Context) handleContainerDestroy(w web.ResponseWriter, r *web.Request) {
+func handleContainerDestroy(w web.ResponseWriter, r *web.Request) {
 	hostname := r.PathParams["hid"]
 	containerName := r.PathParams["cid"]
 
@@ -180,7 +168,8 @@ func (c *Context) handleContainerDestroy(w web.ResponseWriter, r *web.Request) {
 		"destroy",
 	})
 
-	answer, _ := sendTcpMessage(hostname+":"+c.peerAddr, controlMessage)
+	peerAddr, _ := tracker.Config.GetString("cluster", "port")
+	answer, _ := sendTcpMessage(hostname+":"+peerAddr, controlMessage)
 	switch answer {
 	case "done":
 		http.Error(w, "", 204)
@@ -193,7 +182,7 @@ func handleContainerInfo(w web.ResponseWriter, r *web.Request) {
 	http.Error(w, "Получить инфороцию о контейнере", 501)
 }
 
-func (c *Context) handleContainerStart(w web.ResponseWriter, r *web.Request) {
+func handleContainerStart(w web.ResponseWriter, r *web.Request) {
 	var hostname string
 	containerName := r.PathParams["cid"]
 
@@ -225,7 +214,8 @@ func (c *Context) handleContainerStart(w web.ResponseWriter, r *web.Request) {
 		"start",
 	})
 
-	answer, _ := sendTcpMessage(hostname+":"+c.peerAddr, controlMessage)
+	peerAddr, _ := tracker.Config.GetString("cluster", "port")
+	answer, _ := sendTcpMessage(hostname+":"+peerAddr, controlMessage)
 	switch answer {
 	case "done":
 		http.Error(w, "", 204)
@@ -234,7 +224,7 @@ func (c *Context) handleContainerStart(w web.ResponseWriter, r *web.Request) {
 	}
 }
 
-func (c *Context) handleContainerStop(w web.ResponseWriter, r *web.Request) {
+func handleContainerStop(w web.ResponseWriter, r *web.Request) {
 	hostname := r.PathParams["hid"]
 	containerName := r.PathParams["cid"]
 
@@ -256,7 +246,8 @@ func (c *Context) handleContainerStop(w web.ResponseWriter, r *web.Request) {
 		"stop",
 	})
 
-	answer, _ := sendTcpMessage(hostname+":"+c.peerAddr, controlMessage)
+	peerAddr, _ := tracker.Config.GetString("cluster", "port")
+	answer, _ := sendTcpMessage(hostname+":"+peerAddr, controlMessage)
 	switch answer {
 	case "done":
 		http.Error(w, "", 204)

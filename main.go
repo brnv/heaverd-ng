@@ -1,38 +1,53 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"heaverd-ng/tracker"
 	"heaverd-ng/webapi"
 	"log"
+	"os"
 	"sync"
 	"time"
-
-	"github.com/BurntSushi/toml"
 )
 
 var (
-	webApiConfig  = "config/webapi.toml"
-	trackerConfig = "config/tracker.toml"
+	webApiConfigPath  = "config/webapi.toml"
+	trackerConfigPath = "config/tracker.toml"
+	webAddr           string
+	peerAddr          string
+	etcdAddr          string
 )
 
 func main() {
-	if _, err := toml.DecodeFile(webApiConfig, &webapi.Conf); err != nil {
+	f, err := os.Open(webApiConfigPath)
+	if err != nil {
 		log.Fatal("[error]", err)
 	}
-	if _, err := toml.DecodeFile(trackerConfig, &tracker.Conf); err != nil {
+	webapi.Config.ReadHash(bufio.NewReader(f))
+
+	f, err = os.Open(trackerConfigPath)
+	if err != nil {
 		log.Fatal("[error]", err)
 	}
+	tracker.Config.ReadHash(bufio.NewReader(f))
 
-	log.Println("[error]", tracker.Conf)
-
-	flag.StringVar(&webapi.Conf.Web.Port, "web-addr",
-		webapi.Conf.Web.Port, "")
-	flag.StringVar(&tracker.Conf.Cluster.Port, "peer-addr",
-		tracker.Conf.Cluster.Port, "")
-	flag.StringVar(&tracker.Conf.Storage.Port, "etcd-addr",
-		tracker.Conf.Storage.Port, "")
+	flag.StringVar(&webAddr, "web-addr", "", "")
+	flag.StringVar(&peerAddr, "peer-addr", "", "")
+	flag.StringVar(&etcdAddr, "etcd-addr", "", "")
 	flag.Parse()
+
+	if webAddr != "" {
+		webapi.Config.Set(webAddr, "web", "port")
+	}
+
+	if peerAddr != "" {
+		tracker.Config.Set(peerAddr, "cluster", "port")
+	}
+
+	if etcdAddr != "" {
+		tracker.Config.Set(etcdAddr, "etcd", "port")
+	}
 
 	log.SetFlags(log.Lshortfile | log.Ldate | log.Ltime)
 	log.SetPrefix("[heaverd-ng] ")
