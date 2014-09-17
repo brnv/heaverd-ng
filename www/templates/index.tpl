@@ -1,68 +1,75 @@
 <!DOCTYPE html>
 <html>
 <head></head>
-<body>
-	<div id="scoreContainer" style="height: 100%;"></div>
+<body style="margin: 50px auto; width: 500px; text-align: center;">
+	<div id="charts">
+	</div>
 
 	<script src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
-	<script src="/js/canvasjs.min.js" type="text/javascript" charset="utf-8"></script>
+	<script src="http://www.chartjs.org/assets/Chart.min.js"></script>
 
 	<script type="text/javascript" charset="utf-8">
-		jQuery.ajax({
+		$.ajax({
 			url: "http://container.s:8081/v2/h",
 			success: function(data){
-				hosts = jQuery.parseJSON(data);
+				hosts = $.parseJSON(data);
 				render(hosts);
 			}
 		});
 
 		function render(hosts) {
-			options = [];
-			weightThreshold = 0.4;
+			pools = {};
 
-			jQuery.each(hosts, function(hostname, info) {
-				option = {
-					count:Object.keys(info.Containers).length,
-					name: /(\w+)\./g.exec(hostname)[1],
-					y: info.Score,
-					messages: [],
-				};
-				if (info.CpuWeight < weightThreshold) {
-					option.messages.push("cpu")
-				}
-				if (info.DiskWeight < weightThreshold) {
-					option.messages.push("disk")
-				}
-				if (info.RamWeight < weightThreshold) {
-					option.messages.push("ram")
-				}
-				if (option.messages.length > 0) {
-					option.messages[0] = "(low: " + option.messages[0]
-					option.messages[option.messages.length-1] =
-						option.messages[option.messages.length-1] + ")"
+			$.each(hosts, function(hostname, info) {
+				$.each(info.Pools, function(key, poolname) {
+					if (!pools[poolname]) {
+						pools[poolname] = [];
+					}
+					pools[poolname].push(info);
+				});
+			});
+
+			var colorIndex = 0;
+
+			var colors= [
+				"#3D5527",
+				"#4A6A2B",
+				"#8A2F65",
+				"#8F2F3D",
+				"#934E2F"
+			];
+
+			$.each(pools, function(poolname, hosts) {
+				$("#charts").append('<canvas id="'+
+					poolname+'" width="500" height="300"></canvas>'+
+					'<p>'+poolname+' pool</p><p id="'+poolname+'"></p></br>')
+
+				data = []
+				options = {
+					animation:false,
+					showTooltips:false,
+					legendTemplate : "<ul class=\"<%=name.toLowerCase()%>-legend\"><% for (var i=0; i<segments.length; i++){%><li><span style=\"background-color:<%=segments[i].lineColor%>\"></span><%if(segments[i].label){%><%=segments[i].label%><%}%></li><%}%></ul>"
 				}
 
-				options.push(option);
-			})
+				$.each(hosts, function(key, host) {
+					data.push({
+						value: host.Score,
+						color: colors[colorIndex],
+						label: "("+Object.keys(host.Containers).length+") "+host.Hostname,
+					});
 
-			var score = new CanvasJS.Chart("scoreContainer",
-			{
-				title:{
-					text: "Hosts score",
-				},
-				legend: {
-					verticalAlign: "bottom",
-					horizontalAlign: "center"
-				},
-				data: [{
-					type: "pie",
-					toolTipContent: "{name}: {y}",
-					indexLabel: "({count}) {name} {messages} #percent%",
-					dataPoints: options
-				}],
-				animationEnabled: false,
-			})
-			score.render();
+					var chart = new Chart($("#"+poolname).
+						get(0).getContext("2d")).Pie(data, options);
+						console.log(chart)
+					$('p#'+poolname).html(chart.generateLegend())
+
+					colorIndex = colorIndex + 1;
+					if (colorIndex == colors.length) {
+						colorIndex = 0;
+					}
+				})
+
+			});
 		}
 	</script>
 </body>
