@@ -54,7 +54,7 @@ func Start(wg *sync.WaitGroup) {
 	}
 }
 
-func CreateIntent(targetHost string, containerName string) bool {
+func CreateIntent(targetHost string, containerName string, poolName string) bool {
 	intent, _ := json.Marshal(lxc.Container{
 		Name:   containerName,
 		Host:   targetHost,
@@ -67,7 +67,8 @@ func CreateIntent(targetHost string, containerName string) bool {
 		return false
 	}
 
-	log.Println("Intent: host", targetHost+", container", containerName)
+	log.Println("Intent: host", targetHost+", container", containerName,
+		"pool", poolName)
 	return true
 }
 

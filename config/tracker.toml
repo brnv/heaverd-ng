@@ -1,5 +1,5 @@
 [cluster]
 port = "1444"
-pools = ["dev", "test"]
+pools = ["default"]
 [etcd]
 port = "4001"

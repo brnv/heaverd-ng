@@ -124,7 +124,7 @@ func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 		return
 	}
 
-	ready := tracker.CreateIntent(targetHost, containerName)
+	ready := tracker.CreateIntent(targetHost, containerName, poolName)
 
 	if ready != true {
 		logMessage := "Not unique container name"

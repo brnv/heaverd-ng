@@ -1,12 +1,11 @@
 <!DOCTYPE html>
 <html>
 <head></head>
-<body style="margin: 50px auto; width: 500px; text-align: center;">
-	<div id="charts">
-	</div>
+<body style="margin: 50px auto; width: 700px; text-align: center;">
+	<div id="charts"></div>
 
 	<script src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
-	<script src="http://www.chartjs.org/assets/Chart.min.js"></script>
+	<script src="http://code.highcharts.com/highcharts.js"></script>
 
 	<script type="text/javascript" charset="utf-8">
 		$.ajax({
@@ -29,46 +28,93 @@
 				});
 			});
 
-			var colorIndex = 0;
-
-			var colors= [
-				"#3D5527",
-				"#4A6A2B",
-				"#8A2F65",
-				"#8F2F3D",
-				"#934E2F"
+			colors = [
+				"#416E32",
+				"#A73853",
+				"#457B34",
+				"#AA3938",
+				"#498736",
+				"#AC5638",
+				"#AF7538",
+				"#4D9437",
+				"#B29538",
 			];
 
-			$.each(pools, function(poolname, hosts) {
-				$("#charts").append('<canvas id="'+
-					poolname+'" width="500" height="300"></canvas>'+
-					'<p>'+poolname+' pool</p><p id="'+poolname+'"></p></br>')
+			colorIndex = 0;
 
-				data = []
-				options = {
-					animation:false,
-					showTooltips:false,
-					legendTemplate : "<ul class=\"<%=name.toLowerCase()%>-legend\"><% for (var i=0; i<segments.length; i++){%><li><span style=\"background-color:<%=segments[i].lineColor%>\"></span><%if(segments[i].label){%><%=segments[i].label%><%}%></li><%}%></ul>"
-				}
+			$.each(pools, function(poolname, hosts) {
+				$("#charts").append('<div id="'+ poolname+'"></div><br/>');
+
+				poolsData = [];
+				weightsData = [];
+
+				totalScore = 0;
+				$.each(hosts, function(key, host) {
+					totalScore += host.Score;
+				});
 
 				$.each(hosts, function(key, host) {
-					data.push({
-						value: host.Score,
-						color: colors[colorIndex],
-						label: "("+Object.keys(host.Containers).length+") "+host.Hostname,
-					});
+					poolsData.push(
+						{
+							name: host.Hostname,
+							y: host.Score/totalScore*100,
+							color:colors[colorIndex],
+						}
+					);
 
-					var chart = new Chart($("#"+poolname).
-						get(0).getContext("2d")).Pie(data, options);
-						console.log(chart)
-					$('p#'+poolname).html(chart.generateLegend())
+					weights = {
+						"cpu": [host.CpuWeight, "CPU "+(host.CpuCapacity-host.CpuUsage).toFixed(2)+"%"],
+						"ram": [host.RamWeight, "RAM "+(host.RamFree/1024/1024).toFixed(2)+" GiB"],
+						"disk": [host.DiskWeight, "HDD "+(host.DiskFree/1024/1024).toFixed(2)+" GiB"]
+					};
 
-					colorIndex = colorIndex + 1;
+					j = 0;
+					$.each(weights,
+						function(param, value) {
+							wl = Object.keys(weights).length
+							brightness = 1/wl-(j/wl)/wl;
+							weightsData.push({
+									name: value[1],
+									y: host.Score/totalScore*100/(host.CpuWeight+host.RamWeight+host.DiskWeight)*value[0],
+									color: Highcharts.Color(colors[colorIndex]).brighten(brightness).get()
+							});
+							j += 1;
+						}
+					);
+					colorIndex += 1;
 					if (colorIndex == colors.length) {
 						colorIndex = 0;
 					}
-				})
+				});
 
+				$('#'+poolname).highcharts({
+					chart: {
+						type: 'pie'
+					},
+					tooltip: {
+						enabled: false
+					},
+					title: {
+						text: poolname+' pool'
+					},
+					series: [
+						{
+							animation: false,
+							data: poolsData,
+							size: '85%',
+							dataLabels: {
+								color: 'white',
+								distance: -50
+							}
+						}, {
+							animation: false,
+							data: poolsData,
+							data: weightsData,
+							size: '100%',
+							innerSize: '85%'
+						}
+					]
+				});
 			});
 		}
 	</script>

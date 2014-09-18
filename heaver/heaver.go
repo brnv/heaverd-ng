@@ -15,7 +15,7 @@ var (
 	startArg    = "-Sn"
 	stopArg     = "-Tn"
 	destroyArg  = "-Dn"
-	reIp        = regexp.MustCompile("(\\d{1,3}.\\d{1,3}.\\d{1,3}.\\d{1,3})")
+	reIp        = regexp.MustCompile("(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})")
 	reStarted   = regexp.MustCompile("started")
 	reStopped   = regexp.MustCompile("stopped")
 	reDestroyed = regexp.MustCompile("destroyed")
