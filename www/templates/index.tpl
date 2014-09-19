@@ -8,13 +8,33 @@
 	<script src="http://code.highcharts.com/highcharts.js"></script>
 
 	<script type="text/javascript" charset="utf-8">
-		$.ajax({
-			url: "http://container.s:8081/v2/h",
-			success: function(data){
-				hosts = $.parseJSON(data);
-				render(hosts);
-			}
-		});
+
+		var fetchData = function() {
+			$.ajax({
+				url: "http://container.s:8081/v2/h",
+				success: function(data) {
+					hosts = $.parseJSON(data);
+					render(hosts);
+				}
+			});
+			setTimeout(function() {
+				fetchData()
+			}, 1000);
+		}
+
+		fetchData();
+
+		colors = [
+			"#416E32",
+			"#A73853",
+			"#457B34",
+			"#AA3938",
+			"#498736",
+			"#AC5638",
+			"#AF7538",
+			"#4D9437",
+			"#B29538",
+		];
 
 		function render(hosts) {
 			pools = {};
@@ -27,18 +47,6 @@
 					pools[poolname].push(info);
 				});
 			});
-
-			colors = [
-				"#416E32",
-				"#A73853",
-				"#457B34",
-				"#AA3938",
-				"#498736",
-				"#AC5638",
-				"#AF7538",
-				"#4D9437",
-				"#B29538",
-			];
 
 			colorIndex = 0;
 
@@ -56,7 +64,7 @@
 				$.each(hosts, function(key, host) {
 					poolsData.push(
 						{
-							name: host.Hostname,
+							name: host.Hostname + " ("+Object.keys(host.Containers).length+")",
 							y: host.Score/totalScore*100,
 							color:colors[colorIndex],
 						}
@@ -117,10 +125,6 @@
 				});
 			});
 		}
-
-		setTimeout(function() {
-			location.reload();
-		}, 10000);
 	</script>
 </body>
 </html>
