@@ -21,36 +21,127 @@ import (
 
 var Config = zhash.NewHash()
 
-type Context struct{}
+type (
+	Context  struct{}
+	MyRouter struct {
+		Router *web.Router
+		Docs   []RestDocs
+	}
+	RestDocs struct {
+		Method      string
+		Url         string
+		Description string
+	}
+)
+
+func (router MyRouter) String() string {
+	result := ""
+	for _, doc := range router.Docs {
+		result = result + fmt.Sprintf("%s %s - %s\n", doc.Method,
+			doc.Url, doc.Description)
+	}
+	return result
+}
+
+func (r *MyRouter) Delete(path string, fn interface{}, desc string) *MyRouter {
+	r.Docs = append(r.Docs, RestDocs{
+		Method:      "DELETE",
+		Url:         path,
+		Description: desc,
+	})
+	r.Router.Delete(path, fn)
+	return r
+}
+
+func (r *MyRouter) Error(fn interface{}) {
+	r.Router.Error(fn)
+}
+
+func (r *MyRouter) Get(path string, fn interface{}, desc string) *MyRouter {
+	r.Docs = append(r.Docs, RestDocs{
+		Method:      "GET",
+		Url:         path,
+		Description: desc,
+	})
+	r.Router.Get(path, fn)
+	return r
+}
+
+func (r *MyRouter) Middleware(fn interface{}) *MyRouter {
+	r.Router.Middleware(fn)
+	return r
+}
+
+func (r *MyRouter) NotFound(fn interface{}) {
+	r.Router.NotFound(fn)
+}
+
+func (r *MyRouter) Patch(path string, fn interface{}) *MyRouter {
+	r.Router.Patch(path, fn)
+	return r
+}
+
+func (r *MyRouter) Post(path string, fn interface{}, desc string) *MyRouter {
+	r.Docs = append(r.Docs, RestDocs{
+		Method:      "POST",
+		Url:         path,
+		Description: desc,
+	})
+	r.Router.Post(path, fn)
+	return r
+}
+
+func (r *MyRouter) Put(path string, fn interface{}, desc string) *MyRouter {
+	r.Docs = append(r.Docs, RestDocs{
+		Method:      "PUT",
+		Url:         path,
+		Description: desc,
+	})
+	r.Router.Put(path, fn)
+	return r
+}
+
+func (r *MyRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	r.Router.ServeHTTP(w, req)
+}
+
+func (r *MyRouter) Subrouter(ctx interface{}, pathPrefix string) *MyRouter {
+	r.Router = web.NewWithPrefix(ctx, pathPrefix)
+	return r
+}
+
+var myRouter = MyRouter{
+	Router: web.New(Context{}),
+}
 
 func Start(wg *sync.WaitGroup, seed int64) {
 	rand.Seed(seed)
 
-	root := web.New(Context{}).
+	root := myRouter.
 		Middleware(web.LoggerMiddleware).
 		Middleware(web.ShowErrorsMiddleware).
 		Middleware(web.StaticMiddleware("www")).
-		Get("/score", handleScore)
+		Get("/score", handleScore, "Графики пулов хостов")
 
 	root.Subrouter(Context{}, "/v2").
-		Get("/", handleHelp).
-		Get("/h/:hid/stats", handleStats).
-		Get("/h/", handleHostList).
-		Post("/c/:cid", handleContainerCreate).
-		Post("/p/:poolid/:cid", handleContainerCreate).
-		Delete("/h/:hid/:cid", handleContainerDestroy).
-		Post("/h/:hid/:cid/start", handleContainerStart).
-		Post("/c/:cid/start", handleContainerStart).
-		Post("/h/:hid/:cid/stop", handleContainerStop).
-		Post("/h/:hid", handleHostOperation).
-		Get("/h/:hid", handleHostContainersList).
-		Get("/h/:hid/ping", handleHostPing).
-		Get("/c/", handleClusterContainersList).
-		Get("/c/:cid", handleHostByContainer).
-		Post("/h/:hid/:cid", handleHostContainerCreate).
-		Put("/h/:hid/:cid", handleHostContainerUpdate).
-		Get("/h/:hid/:cid", handleContainerInfo).
-		Get("/h/:hid/:cid/ping", handleContainerPing)
+		Get("/", handleHelp, "Справка по API").
+		Get("/h/:hid/stats", handleStats, "Статистика хоста :hid").
+		Get("/h/", handleHostList, "Список всех хостов").
+		Post("/c/:cid", handleContainerCreate, "Создать контейнер :cid (балансировка)").
+		Post("/p/:poolid/:cid", handleContainerCreate, "Создать контейнер в пуле :poolid").
+		Delete("/h/:hid/:cid", handleContainerDestroy, "Удалить контейнер").
+		Post("/h/:hid/:cid/start", handleContainerStart, "Стартануть контейнер").
+		Post("/c/:cid/start", handleContainerStart, "Стартануть контейнер").
+		Post("/h/:hid/:cid/stop", handleContainerStop, "Стоп контейнера").
+		Post("/h/:hid", handleHostOperation, "Операции с хостом").
+		Get("/h/:hid", handleHostContainersList, "Список контейнеров на хосте").
+		Get("/h/:hid/ping", handleHostPing, "Пинг сервера").
+		Get("/c/", handleClusterContainersList, "Все контейнеры").
+		Get("/c/:cid", handleHostByContainer, "Найти хост по контейнеру").
+		Post("/h/:hid/:cid", handleHostContainerCreate, "Создать контейнер на хосте").
+		Put("/h/:hid/:cid", handleHostContainerUpdate, "Обновить контейнер").
+		Get("/h/:hid/:cid", handleContainerInfo, "Информация о контейнере").
+		Get("/h/:hid/:cid/ping", handleContainerPing, "Пинг контейнера")
 	//Post("/h/:hid/:cid/freeze", ).
 	//Post("/h/:hid/:cid/unfreeze", ).
 	//Get("/h/:hid/:cid/tarball", ).
@@ -69,7 +160,8 @@ func handleScore(w web.ResponseWriter, r *web.Request) {
 }
 
 func handleHelp(w web.ResponseWriter, r *web.Request) {
-	fmt.Fprintf(w, "Справка по API в запрошенном формате")
+	r.Header.Set("Content-Type", "text/html")
+	fmt.Fprintf(w, fmt.Sprintf("%s", myRouter))
 }
 
 func handleStats(w web.ResponseWriter, r *web.Request) {
