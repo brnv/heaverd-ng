@@ -15,116 +15,29 @@ import (
 	"heaverd-ng/libscore"
 	"heaverd-ng/tracker"
 
-	"github.com/gocraft/web"
+	"github.com/brnv/web"
 	"github.com/zazab/zhash"
 )
 
-var Config = zhash.NewHash()
-
 type (
-	Context  struct{}
-	MyRouter struct {
-		Router *web.Router
-		Docs   []RestDocs
-	}
-	RestDocs struct {
-		Method      string
-		Url         string
-		Description string
-	}
+	Context struct{}
 )
 
-func (router MyRouter) String() string {
-	result := ""
-	for _, doc := range router.Docs {
-		result = result + fmt.Sprintf("%s %s - %s\n", doc.Method,
-			doc.Url, doc.Description)
-	}
-	return result
-}
-
-func (r *MyRouter) Delete(path string, fn interface{}, desc string) *MyRouter {
-	r.Docs = append(r.Docs, RestDocs{
-		Method:      "DELETE",
-		Url:         path,
-		Description: desc,
-	})
-	r.Router.Delete(path, fn)
-	return r
-}
-
-func (r *MyRouter) Error(fn interface{}) {
-	r.Router.Error(fn)
-}
-
-func (r *MyRouter) Get(path string, fn interface{}, desc string) *MyRouter {
-	r.Docs = append(r.Docs, RestDocs{
-		Method:      "GET",
-		Url:         path,
-		Description: desc,
-	})
-	r.Router.Get(path, fn)
-	return r
-}
-
-func (r *MyRouter) Middleware(fn interface{}) *MyRouter {
-	r.Router.Middleware(fn)
-	return r
-}
-
-func (r *MyRouter) NotFound(fn interface{}) {
-	r.Router.NotFound(fn)
-}
-
-func (r *MyRouter) Patch(path string, fn interface{}) *MyRouter {
-	r.Router.Patch(path, fn)
-	return r
-}
-
-func (r *MyRouter) Post(path string, fn interface{}, desc string) *MyRouter {
-	r.Docs = append(r.Docs, RestDocs{
-		Method:      "POST",
-		Url:         path,
-		Description: desc,
-	})
-	r.Router.Post(path, fn)
-	return r
-}
-
-func (r *MyRouter) Put(path string, fn interface{}, desc string) *MyRouter {
-	r.Docs = append(r.Docs, RestDocs{
-		Method:      "PUT",
-		Url:         path,
-		Description: desc,
-	})
-	r.Router.Put(path, fn)
-	return r
-}
-
-func (r *MyRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	r.Router.ServeHTTP(w, req)
-}
-
-func (r *MyRouter) Subrouter(ctx interface{}, pathPrefix string) *MyRouter {
-	r.Router = web.NewWithPrefix(ctx, pathPrefix)
-	return r
-}
-
-var myRouter = MyRouter{
-	Router: web.New(Context{}),
-}
+var (
+	rootRouter = web.New(Context{})
+	apiRouter  = rootRouter.Subrouter(Context{}, "/v2")
+	Config     = zhash.NewHash()
+)
 
 func Start(wg *sync.WaitGroup, seed int64) {
 	rand.Seed(seed)
 
-	root := myRouter.
-		Middleware(web.LoggerMiddleware).
+	rootRouter.Middleware(web.LoggerMiddleware).
 		Middleware(web.ShowErrorsMiddleware).
 		Middleware(web.StaticMiddleware("www")).
 		Get("/score", handleScore, "Графики пулов хостов")
 
-	root.Subrouter(Context{}, "/v2").
-		Get("/", handleHelp, "Справка по API").
+	apiRouter.Get("/", handleHelp, "Справка по API").
 		Get("/h/:hid/stats", handleStats, "Статистика хоста :hid").
 		Get("/h/", handleHostList, "Список всех хостов").
 		Post("/c/:cid", handleContainerCreate, "Создать контейнер :cid (балансировка)").
@@ -149,7 +62,7 @@ func Start(wg *sync.WaitGroup, seed int64) {
 
 	port, _ := Config.GetString("web", "port")
 	log.Println("started at port:", port)
-	log.Fatal(http.ListenAndServe(":"+port, root))
+	log.Fatal(http.ListenAndServe(":"+port, rootRouter))
 }
 
 func handleScore(w web.ResponseWriter, r *web.Request) {
@@ -161,7 +74,8 @@ func handleScore(w web.ResponseWriter, r *web.Request) {
 
 func handleHelp(w web.ResponseWriter, r *web.Request) {
 	r.Header.Set("Content-Type", "text/html")
-	fmt.Fprintf(w, fmt.Sprintf("%s", myRouter))
+	j, _ := json.Marshal(apiRouter)
+	fmt.Fprintf(w, string(j))
 }
 
 func handleStats(w web.ResponseWriter, r *web.Request) {

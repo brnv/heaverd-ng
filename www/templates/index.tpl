@@ -2,13 +2,12 @@
 <html>
 <head></head>
 <body style="margin: 50px auto; width: 700px; text-align: center;">
+
 	<div id="charts"></div>
 
 	<script src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
 	<script src="http://code.highcharts.com/highcharts.js"></script>
-
 	<script type="text/javascript" charset="utf-8">
-
 		var fetchData = function() {
 			$.ajax({
 				url: "http://container.s:8081/v2/h",
@@ -19,7 +18,7 @@
 			});
 			setTimeout(function() {
 				fetchData()
-			}, 1000);
+			}, 5000);
 		}
 
 		fetchData();
@@ -36,6 +35,8 @@
 			"#B29538",
 		];
 
+		charts = {};
+
 		function render(hosts) {
 			pools = {};
 
@@ -51,17 +52,21 @@
 			colorIndex = 0;
 
 			$.each(pools, function(poolname, hosts) {
-				$("#charts").append('<div id="'+ poolname+'"></div><br/>');
-
 				poolsData = [];
 				weightsData = [];
 
 				totalScore = 0;
 				$.each(hosts, function(key, host) {
+					if (host.Score == 0) {
+						return;
+					}
 					totalScore += host.Score;
 				});
 
 				$.each(hosts, function(key, host) {
+					if (host.Score == 0) {
+						return;
+					}
 					poolsData.push(
 						{
 							name: host.Hostname + " ("+Object.keys(host.Containers).length+")",
@@ -95,34 +100,43 @@
 					}
 				});
 
-				$('#'+poolname).highcharts({
-					chart: {
-						type: 'pie'
-					},
-					tooltip: {
-						enabled: false
-					},
-					title: {
-						text: poolname+' pool'
-					},
-					series: [
-						{
-							animation: false,
-							data: poolsData,
-							size: '85%',
-							dataLabels: {
-								color: 'white',
-								distance: -50
+				if ($('div#chart-'+poolname).length == 0) {
+					$("#charts").append('<div id="chart-'+ poolname+'"></div><br/>');
+
+					charts[poolname] = new Highcharts.Chart({
+						chart: {
+							renderTo: 'chart-'+poolname,
+							type: 'pie'
+						},
+						tooltip: {
+							enabled: false
+						},
+						title: {
+							text: poolname+' pool'
+						},
+						series: [
+							{
+								animation: false,
+								data: poolsData,
+								size: '85%',
+								dataLabels: {
+									color: 'white',
+									distance: -50
+								}
+							}, {
+								animation: false,
+								data: poolsData,
+								data: weightsData,
+								size: '100%',
+								innerSize: '85%'
 							}
-						}, {
-							animation: false,
-							data: poolsData,
-							data: weightsData,
-							size: '100%',
-							innerSize: '85%'
-						}
-					]
-				});
+						]
+					});
+				} else {
+					charts[poolname].series[0].setData(poolsData, true);
+					charts[poolname].series[1].setData(weightsData, true);
+					charts[poolname].redraw();
+				}
 			});
 		}
 	</script>
