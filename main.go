@@ -12,41 +12,39 @@ import (
 )
 
 var (
-	webApiConfigPath  = "config/webapi.toml"
-	trackerConfigPath = "config/tracker.toml"
-	webAddr           string
-	peerAddr          string
-	etcdAddr          string
+	webApiConfigPath  = "/etc/heaverd-ng/webapi.toml"
+	webPort           = "8081"
+	webTemplates      = "/mnt/a.baranov/www/templates/"
+	trackerConfigPath = "/etc/heaverd-ng/tracker.toml"
+	clusterPort       = "1444"
+	etcdPort          = "4001"
 )
 
 func main() {
-	f, err := os.Open(webApiConfigPath)
-	if err != nil {
-		log.Fatal("[error]", err)
-	}
-	webapi.Config.ReadHash(bufio.NewReader(f))
-
-	f, err = os.Open(trackerConfigPath)
-	if err != nil {
-		log.Fatal("[error]", err)
-	}
-	tracker.Config.ReadHash(bufio.NewReader(f))
-
-	flag.StringVar(&webAddr, "web-addr", "", "")
-	flag.StringVar(&peerAddr, "peer-addr", "", "")
-	flag.StringVar(&etcdAddr, "etcd-addr", "", "")
+	flag.StringVar(&webApiConfigPath, "webapi-config", webApiConfigPath, "")
+	flag.StringVar(&trackerConfigPath, "tracker-config", trackerConfigPath, "")
+	flag.StringVar(&webPort, "web-port", webPort, "")
+	flag.StringVar(&clusterPort, "cluster-port", clusterPort, "")
+	flag.StringVar(&etcdPort, "etcd-port", etcdPort, "")
 	flag.Parse()
 
-	if webAddr != "" {
-		webapi.Config.Set(webAddr, "web", "port")
+	webapi.Config.Set(webPort, "web", "port")
+	webapi.Config.Set(webTemplates, "templates", "dir")
+	tracker.Config.Set(clusterPort, "cluster", "port")
+	tracker.Config.Set(etcdPort, "etcd", "port")
+
+	f, err := os.Open(webApiConfigPath)
+	if err == nil {
+		webapi.Config.ReadHash(bufio.NewReader(f))
+	} else {
+		log.Println("[error]", "can't read configuration file ", webApiConfigPath)
 	}
 
-	if peerAddr != "" {
-		tracker.Config.Set(peerAddr, "cluster", "port")
-	}
-
-	if etcdAddr != "" {
-		tracker.Config.Set(etcdAddr, "etcd", "port")
+	f, err = os.Open(trackerConfigPath)
+	if err == nil {
+		tracker.Config.ReadHash(bufio.NewReader(f))
+	} else {
+		log.Println("[error]", "can't read configuration file ", trackerConfigPath)
 	}
 
 	log.SetFlags(log.Lshortfile | log.Ldate | log.Ltime)

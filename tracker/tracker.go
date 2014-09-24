@@ -20,13 +20,17 @@ var (
 	etcdc                 = &etcd.Client{}
 	Hostinfo              = &libscore.Hostinfo{}
 	intentContainerStatus = "pending"
+	defaultPools          = []string{"test"}
 )
 
 var Config = zhash.NewHash()
 
 func Start(wg *sync.WaitGroup) {
 	port, _ := Config.GetString("cluster", "port")
-	pools, _ := Config.GetStringSlice("cluster", "pools")
+	pools, err := Config.GetStringSlice("cluster", "pools")
+	if err != nil {
+		pools = defaultPools
+	}
 	Hostinfo.Pools = pools
 
 	listener, err := net.Listen("tcp", ":"+port)
