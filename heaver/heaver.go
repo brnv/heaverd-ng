@@ -3,7 +3,6 @@ package heaver
 import (
 	"errors"
 	"heaverd-ng/libstats/lxc"
-	"log"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -48,7 +47,7 @@ func Create(containerName string, image string) (lxc.Container, error) {
 	return container, nil
 }
 
-func Control(containerName string, action string) bool {
+func Control(containerName string, action string) error {
 	var reControl *regexp.Regexp
 	switch action {
 	case "start":
@@ -65,18 +64,15 @@ func Control(containerName string, action string) bool {
 
 	answer, err := getHeaverCmd(controlArgs).Output()
 	if err != nil {
-		log.Println("[error]", err)
-		return false
+		return errors.New(string(answer))
 	}
 
 	matches := reControl.FindStringSubmatch(string(answer))
 	if matches == nil {
-		return false
+		return errors.New("Can't perform " + action)
 	}
 
-	log.Println("container", containerName, matches[0])
-
-	return true
+	return nil
 }
 
 func List(host string) (map[string]lxc.Container, error) {

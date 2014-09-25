@@ -52,9 +52,11 @@ func Run(configPath string, seed int64) {
 		Post("/c/:cid", handleContainerCreate, "Создать контейнер :cid (балансировка)").
 		Post("/p/:poolid/:cid", handleContainerCreate, "Создать контейнер в пуле :poolid (балансировка)").
 		Delete("/h/:hid/:cid", handleContainerDestroy, "Удалить контейнер").
+		Delete("/c/:cid", handleContainerDestroy, "Удалить контейнер").
 		Post("/h/:hid/:cid/start", handleContainerStart, "Стартануть контейнер").
 		Post("/c/:cid/start", handleContainerStart, "Стартануть контейнер").
 		Post("/h/:hid/:cid/stop", handleContainerStop, "Стоп контейнера").
+		Post("/c/:cid/stop", handleContainerStop, "Стоп контейнера").
 		Post("/h/:hid", handleHostOperation, "Операции с хостом").
 		Get("/h/:hid", handleHostContainersList, "Список контейнеров на хосте").
 		Get("/h/:hid/ping", handleHostPing, "Пинг сервера").
@@ -162,7 +164,7 @@ func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 	peerAddr, _ := config.GetString("cluster", "port")
 	hostAnswer, _ := sendTcpMessage(targetHost+":"+peerAddr, createMessage)
 
-	if strings.Contains(hostAnswer, "error") {
+	if strings.Contains(hostAnswer, "Error") {
 		http.Error(w, hostAnswer, 400)
 		return
 	}
@@ -179,8 +181,18 @@ func handleHostContainerUpdate(w web.ResponseWriter, r *web.Request) {
 }
 
 func handleContainerDestroy(w web.ResponseWriter, r *web.Request) {
-	hostname := r.PathParams["hid"]
+	var hostname string
 	containerName := r.PathParams["cid"]
+
+	if _, ok := r.PathParams["hid"]; ok {
+		hostname = r.PathParams["hid"]
+	} else {
+		hostname = getHostnameByContainer(containerName)
+		if hostname == "" {
+			http.Error(w, "Unknown container", 404)
+			return
+		}
+	}
 
 	if !checkHostname(hostname) {
 		http.Error(w, "Unknown host", 404)
@@ -203,10 +215,10 @@ func handleContainerDestroy(w web.ResponseWriter, r *web.Request) {
 	peerAddr, _ := config.GetString("cluster", "port")
 	answer, _ := sendTcpMessage(hostname+":"+peerAddr, controlMessage)
 	switch answer {
-	case "done":
+	case "ok":
 		http.Error(w, "", 204)
-	case "not_done":
-		http.Error(w, "Not destroyed", 504)
+	default:
+		http.Error(w, answer, 409)
 	}
 }
 
@@ -249,16 +261,26 @@ func handleContainerStart(w web.ResponseWriter, r *web.Request) {
 	peerAddr, _ := config.GetString("cluster", "port")
 	answer, _ := sendTcpMessage(hostname+":"+peerAddr, controlMessage)
 	switch answer {
-	case "done":
+	case "ok":
 		http.Error(w, "", 204)
-	case "not done":
-		http.Error(w, "Not started", 502)
+	default:
+		http.Error(w, answer, 409)
 	}
 }
 
 func handleContainerStop(w web.ResponseWriter, r *web.Request) {
-	hostname := r.PathParams["hid"]
+	var hostname string
 	containerName := r.PathParams["cid"]
+
+	if _, ok := r.PathParams["hid"]; ok {
+		hostname = r.PathParams["hid"]
+	} else {
+		hostname = getHostnameByContainer(containerName)
+		if hostname == "" {
+			http.Error(w, "Unknown container", 404)
+			return
+		}
+	}
 
 	if !checkHostname(hostname) {
 		http.Error(w, "Unknown host", 404)
@@ -281,10 +303,10 @@ func handleContainerStop(w web.ResponseWriter, r *web.Request) {
 	peerAddr, _ := config.GetString("cluster", "port")
 	answer, _ := sendTcpMessage(hostname+":"+peerAddr, controlMessage)
 	switch answer {
-	case "done":
+	case "ok":
 		http.Error(w, "", 204)
-	case "not_done":
-		http.Error(w, "Not stopped", 502)
+	default:
+		http.Error(w, answer, 409)
 	}
 }
 

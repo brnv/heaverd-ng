@@ -158,11 +158,11 @@ func messageListening(listener net.Listener) {
 				if err != nil {
 					log.Println("[error]", err)
 				}
-				switch heaver.Control(Control.ContainerName, Control.Action) {
-				case true:
-					fmt.Fprintf(messageSocket, "done")
-				case false:
-					fmt.Fprintf(messageSocket, "not_done")
+				err = heaver.Control(Control.ContainerName, Control.Action)
+				if err != nil {
+					fmt.Fprintf(messageSocket, "Error: "+err.Error())
+				} else {
+					fmt.Fprintf(messageSocket, "ok")
 				}
 			default:
 				log.Println("unknown message")
