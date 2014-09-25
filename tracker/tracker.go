@@ -1,6 +1,7 @@
 package tracker
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,7 +10,7 @@ import (
 	"heaverd-ng/libstats/lxc"
 	"log"
 	"net"
-	"sync"
+	"os"
 	"time"
 
 	"github.com/coreos/go-etcd/etcd"
@@ -20,23 +21,24 @@ var (
 	etcdc                 = &etcd.Client{}
 	Hostinfo              = &libscore.Hostinfo{}
 	intentContainerStatus = "pending"
-	defaultPools          = []string{"test"}
 )
 
-var Config = zhash.NewHash()
+var config = zhash.NewHash()
 
-func Start(wg *sync.WaitGroup) {
-	port, _ := Config.GetString("cluster", "port")
-	pools, err := Config.GetStringSlice("cluster", "pools")
+func Run(configPath string) {
+	err := readConfig(configPath)
 	if err != nil {
-		pools = defaultPools
+		log.Println("[error]", err)
+		return
 	}
-	Hostinfo.Pools = pools
+
+	port, _ := config.GetString("cluster", "port")
+	Hostinfo.Pools, _ = config.GetStringSlice("cluster", "pools")
 
 	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		log.Println("[error]", err)
-		wg.Done()
+		return
 	}
 
 	log.Println("started at port:", port)
@@ -45,7 +47,7 @@ func Start(wg *sync.WaitGroup) {
 	etcdc = getEtcdClient()
 	_, err = etcdc.CreateDir("hosts/", 0)
 	_, err = etcdc.CreateDir("containers/", 0)
-	etcdPort, _ := Config.GetString("etcd", "port")
+	etcdPort, _ := config.GetString("etcd", "port")
 	log.Println("etcd port:", etcdPort)
 
 	for {
@@ -227,6 +229,16 @@ func hostinfoUpdate() error {
 }
 
 func getEtcdClient() *etcd.Client {
-	port, _ := Config.GetString("etcd", "port")
+	port, _ := config.GetString("etcd", "port")
 	return etcd.NewClient([]string{"http://localhost:" + port})
+}
+
+func readConfig(path string) error {
+	f, err := os.Open(path)
+	if err == nil {
+		config.ReadHash(bufio.NewReader(f))
+		return nil
+	} else {
+		return err
+	}
 }

@@ -38,11 +38,11 @@ func (host *Hostinfo) Refresh() error {
 	if err != nil {
 		return err
 	}
-	zfsArcMax, err := zfs.ArcMax()
+	zfsArcMax, err := zfs.GetArcMax()
 	if err != nil {
 		return err
 	}
-	zfsArcCurrent, err := zfs.ArcCurrent()
+	zfsArcCurrent, err := zfs.GetArcCurrent()
 	if err != nil {
 		return err
 	}

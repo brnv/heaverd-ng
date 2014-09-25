@@ -9,7 +9,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
-	"sync"
+	"os"
 	"text/template"
 
 	"heaverd-ng/libscore"
@@ -26,10 +26,15 @@ type (
 var (
 	rootRouter = web.New(Context{})
 	apiRouter  = rootRouter.Subrouter(Context{}, "/v2")
-	Config     = zhash.NewHash()
+	config     = zhash.NewHash()
 )
 
-func Start(wg *sync.WaitGroup, seed int64) {
+func Run(configPath string, seed int64) {
+	err := readConfig(configPath)
+	if err != nil {
+		log.Println("[error]", err)
+		return
+	}
 	rand.Seed(seed)
 
 	rootRouter.Middleware(web.LoggerMiddleware).
@@ -40,6 +45,7 @@ func Start(wg *sync.WaitGroup, seed int64) {
 	apiRouter.Get("/", handleHelp, "Справка по API").
 		Get("/h/:hid/stats", handleStats, "Статистика хоста :hid").
 		Get("/h/", handleHostList, "Список всех хостов").
+		Head("/c/:cid", handleHostByContainer, "Найти хост по контейнеру").
 		Post("/c/:cid", handleContainerCreate, "Создать контейнер :cid (балансировка)").
 		Post("/p/:poolid/:cid", handleContainerCreate, "Создать контейнер в пуле :poolid").
 		Delete("/h/:hid/:cid", handleContainerDestroy, "Удалить контейнер").
@@ -50,7 +56,6 @@ func Start(wg *sync.WaitGroup, seed int64) {
 		Get("/h/:hid", handleHostContainersList, "Список контейнеров на хосте").
 		Get("/h/:hid/ping", handleHostPing, "Пинг сервера").
 		Get("/c/", handleClusterContainersList, "Все контейнеры").
-		Get("/c/:cid", handleHostByContainer, "Найти хост по контейнеру").
 		Post("/h/:hid/:cid", handleHostContainerCreate, "Создать контейнер на хосте").
 		Put("/h/:hid/:cid", handleHostContainerUpdate, "Обновить контейнер").
 		Get("/h/:hid/:cid", handleContainerInfo, "Информация о контейнере").
@@ -60,14 +65,14 @@ func Start(wg *sync.WaitGroup, seed int64) {
 	//Get("/h/:hid/:cid/tarball", ).
 	//Get("/h/:hid/:cid/attach", )
 
-	port, _ := Config.GetString("web", "port")
+	port, _ := config.GetString("web", "port")
 	log.Println("started at port:", port)
 	log.Fatal(http.ListenAndServe(":"+port, rootRouter))
 }
 
 func handleScore(w web.ResponseWriter, r *web.Request) {
 	r.Header.Set("Content-Type", "text/html")
-	templates, _ := Config.GetString("templates", "dir")
+	templates, _ := config.GetString("templates", "dir")
 	template.Must(template.
 		ParseFiles(templates+"/index.tpl")).Execute(w, nil)
 }
@@ -141,7 +146,7 @@ func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 
 	createMessage := makeMessage("container-create", containerName)
 
-	peerAddr, _ := tracker.Config.GetString("cluster", "port")
+	peerAddr, _ := config.GetString("cluster", "port")
 	hostAnswer, _ := sendTcpMessage(targetHost+":"+peerAddr, createMessage)
 	http.Error(w, hostAnswer, 201)
 }
@@ -176,7 +181,7 @@ func handleContainerDestroy(w web.ResponseWriter, r *web.Request) {
 		"destroy",
 	})
 
-	peerAddr, _ := tracker.Config.GetString("cluster", "port")
+	peerAddr, _ := config.GetString("cluster", "port")
 	answer, _ := sendTcpMessage(hostname+":"+peerAddr, controlMessage)
 	switch answer {
 	case "done":
@@ -222,7 +227,7 @@ func handleContainerStart(w web.ResponseWriter, r *web.Request) {
 		"start",
 	})
 
-	peerAddr, _ := tracker.Config.GetString("cluster", "port")
+	peerAddr, _ := config.GetString("cluster", "port")
 	answer, _ := sendTcpMessage(hostname+":"+peerAddr, controlMessage)
 	switch answer {
 	case "done":
@@ -254,7 +259,7 @@ func handleContainerStop(w web.ResponseWriter, r *web.Request) {
 		"stop",
 	})
 
-	peerAddr, _ := tracker.Config.GetString("cluster", "port")
+	peerAddr, _ := config.GetString("cluster", "port")
 	answer, _ := sendTcpMessage(hostname+":"+peerAddr, controlMessage)
 	switch answer {
 	case "done":
@@ -325,4 +330,14 @@ func makeMessage(header string, body interface{}) string {
 		body,
 	})
 	return string(message)
+}
+
+func readConfig(path string) error {
+	f, err := os.Open(path)
+	if err == nil {
+		config.ReadHash(bufio.NewReader(f))
+		return nil
+	} else {
+		return err
+	}
 }

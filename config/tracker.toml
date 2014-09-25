@@ -1,5 +1,0 @@
-[cluster]
-port = "1444"
-pools = ["default"]
-[etcd]
-port = "4001"

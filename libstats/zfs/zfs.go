@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func ArcMax() (int, error) {
+func GetArcMax() (int, error) {
 	cmd := exec.Command("grep", "c_max", "/proc/spl/kstat/zfs/arcstats")
 	out, err := cmd.Output()
 	if err != nil {
@@ -19,7 +19,7 @@ func ArcMax() (int, error) {
 	return arcMax / 1024, nil
 }
 
-func ArcCurrent() (int, error) {
+func GetArcCurrent() (int, error) {
 	cmd := exec.Command("grep", "-E", "^c\\s", "/proc/spl/kstat/zfs/arcstats")
 	out, err := cmd.Output()
 	if err != nil {
