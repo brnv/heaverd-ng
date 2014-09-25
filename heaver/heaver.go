@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	createArgs  = []string{"heaver", "-Cn", "", "-i", "virtubuntu", "--net", "br0"}
+	createArgs  = []string{"heaver", "-Cn", "", "-i", "", "--net", "br0"}
 	controlArgs = []string{"heaver", "", ""}
 	startArg    = "-Sn"
 	stopArg     = "-Tn"
@@ -22,8 +22,9 @@ var (
 	reList      = regexp.MustCompile(`\s*([\d\w-\.]*):\s([a-z]*).*:\s([\d\.]*)/`)
 )
 
-func Create(containerName string) (lxc.Container, error) {
+func Create(containerName string, image string) (lxc.Container, error) {
 	createArgs[2] = containerName
+	createArgs[4] = image
 
 	cmd := getHeaverCmd(createArgs)
 	output, err := cmd.Output()
@@ -40,6 +41,7 @@ func Create(containerName string) (lxc.Container, error) {
 	container := lxc.Container{
 		Name:   containerName,
 		Status: "created",
+		Image:  image,
 		Ip:     ip,
 	}
 

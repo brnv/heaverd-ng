@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"text/template"
 
 	"heaverd-ng/libscore"
@@ -29,6 +30,8 @@ var (
 	config     = zhash.NewHash()
 )
 
+const etcdErrCodeKeyExists = "105"
+
 func Run(configPath string, seed int64) {
 	err := readConfig(configPath)
 	if err != nil {
@@ -47,7 +50,7 @@ func Run(configPath string, seed int64) {
 		Get("/h/", handleHostList, "Список всех хостов").
 		Head("/c/:cid", handleHostByContainer, "Найти хост по контейнеру").
 		Post("/c/:cid", handleContainerCreate, "Создать контейнер :cid (балансировка)").
-		Post("/p/:poolid/:cid", handleContainerCreate, "Создать контейнер в пуле :poolid").
+		Post("/p/:poolid/:cid", handleContainerCreate, "Создать контейнер в пуле :poolid (балансировка)").
 		Delete("/h/:hid/:cid", handleContainerDestroy, "Удалить контейнер").
 		Post("/h/:hid/:cid/start", handleContainerStart, "Стартануть контейнер").
 		Post("/c/:cid/start", handleContainerStart, "Стартануть контейнер").
@@ -125,29 +128,45 @@ func handleHostInformationRequest(w web.ResponseWriter, r *web.Request) {
 }
 
 func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
-	poolName := r.PathParams["poolid"]
+	r.ParseForm()
 	containerName := r.PathParams["cid"]
+	poolName := r.PathParams["poolid"]
 
-	targetHost, err := getPreferedHost(poolName, containerName)
+	targetHost, err := getPreferedHost(containerName, poolName)
 	if err != nil {
 		log.Println("[error]", err)
-		http.Error(w, fmt.Sprintf("%v", err), 502)
+		http.Error(w, fmt.Sprintf("%v", err), 404)
 		return
 	}
 
-	ready := tracker.CreateIntent(targetHost, containerName, poolName)
+	params := map[string]string{
+		"containerName": containerName,
+		"poolName":      poolName,
+		"targetHost":    targetHost,
+	}
+	_, ok := r.Form["image"]
+	if ok {
+		params["image"] = r.Form["image"][0]
+	}
 
-	if ready != true {
-		logMessage := "Not unique container name"
-		log.Println(logMessage)
-		http.Error(w, logMessage, 502)
+	err = tracker.CreateIntent(params)
+	if err != nil {
+		if strings.Contains(err.Error(), etcdErrCodeKeyExists) {
+			http.Error(w, "Not unique name", 409)
+		}
 		return
 	}
 
-	createMessage := makeMessage("container-create", containerName)
+	createMessage := makeMessage("container-create", params["containerName"])
 
 	peerAddr, _ := config.GetString("cluster", "port")
 	hostAnswer, _ := sendTcpMessage(targetHost+":"+peerAddr, createMessage)
+
+	if strings.Contains(hostAnswer, "error") {
+		http.Error(w, hostAnswer, 400)
+		return
+	}
+
 	http.Error(w, hostAnswer, 201)
 }
 
@@ -273,7 +292,7 @@ func handleContainerPing(w web.ResponseWriter, r *web.Request) {
 	http.Error(w, "Пингануть сервер", 501)
 }
 
-func getPreferedHost(poolName string, containerName string) (string, error) {
+func getPreferedHost(containerName string, poolName string) (string, error) {
 	segments := libscore.Segments(tracker.Cluster(poolName))
 	host, err := libscore.ChooseHost(containerName, segments)
 	if err != nil {

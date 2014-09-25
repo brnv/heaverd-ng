@@ -11,6 +11,7 @@ type Container struct {
 	Name   string
 	Host   string
 	Status string
+	Image  string
 	Ip     string
 }
 

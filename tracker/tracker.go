@@ -60,22 +60,27 @@ func Run(configPath string) {
 	}
 }
 
-func CreateIntent(targetHost string, containerName string, poolName string) bool {
+func CreateIntent(params map[string]string) error {
 	intent, _ := json.Marshal(lxc.Container{
-		Name:   containerName,
-		Host:   targetHost,
+		Name:   params["containerName"],
+		Host:   params["targetHost"],
 		Status: intentContainerStatus,
+		Image:  params["image"],
 	})
 
-	_, err := etcdc.Create("containers/"+containerName, string(intent), 5)
+	_, err := etcdc.Create("containers/"+params["containerName"], string(intent), 5)
 	if err != nil {
-		log.Println("[error]", err)
-		return false
+		return err
 	}
 
-	log.Println("Intent: host", targetHost+", container", containerName,
-		"pool", poolName)
-	return true
+	log.Println("Intent: host", params["targetHost"])
+	log.Println("Intent: container", params["containerName"])
+	if params["poolName"] != "" {
+		log.Println("Intent: pool", params["poolName"])
+	}
+	log.Println("Intent: image", params["image"])
+
+	return nil
 }
 
 func Cluster(poolName ...string) map[string]libscore.Hostinfo {
@@ -133,15 +138,14 @@ func messageListening(listener net.Listener) {
 				err := json.Unmarshal(message.Body, &containerName)
 				if err != nil {
 					log.Println("[error]", err)
-					fmt.Fprintf(messageSocket, fmt.Sprintf("%v", err))
+					fmt.Fprintf(messageSocket, "Error: "+err.Error())
 					return
 				}
 
 				result, err := createContainer(containerName)
 				if err != nil {
 					log.Println("[error]", err)
-					fmt.Fprintf(messageSocket, "Heaver error, check logs on "+
-						Hostinfo.Hostname)
+					fmt.Fprintf(messageSocket, "Error: "+err.Error())
 					return
 				}
 				fmt.Fprintf(messageSocket, result)
@@ -172,7 +176,6 @@ func createContainer(name string) (string, error) {
 
 	container := lxc.Container{}
 	err := json.Unmarshal([]byte(rawContainer.Node.Value), &container)
-
 	if err != nil {
 		return "", err
 	}
@@ -189,19 +192,19 @@ func createContainer(name string) (string, error) {
 		return "", err
 	}
 
-	created, err := heaver.Create(name)
+	newContainer, err := heaver.Create(container.Name, container.Image)
 	if err != nil {
 		return "", err
 	}
 
-	created.Host = Hostinfo.Hostname
+	newContainer.Host = Hostinfo.Hostname
 
 	err = hostinfoUpdate()
 	if err != nil {
 		log.Println("[error]", err)
 	}
 
-	result, _ := json.Marshal(created)
+	result, _ := json.Marshal(newContainer)
 	return string(result), nil
 }
 
