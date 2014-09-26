@@ -8,12 +8,12 @@ import (
 	"heaverd-ng/heaver"
 	"heaverd-ng/libscore"
 	"heaverd-ng/libstats/lxc"
-	"log"
 	"net"
 	"os"
 	"time"
 
 	"github.com/coreos/go-etcd/etcd"
+	"github.com/op/go-logging"
 	"github.com/zazab/zhash"
 )
 
@@ -21,15 +21,16 @@ var (
 	etcdc                 = &etcd.Client{}
 	Hostinfo              = &libscore.Hostinfo{}
 	intentContainerStatus = "pending"
+	log                   = &logging.Logger{}
 )
 
 var config = zhash.NewHash()
 
-func Run(configPath string) {
+func Run(configPath string, logger *logging.Logger) {
+	log = logger
 	err := readConfig(configPath)
 	if err != nil {
-		log.Println("[error]", err)
-		return
+		log.Fatal(err.Error())
 	}
 
 	port, _ := config.GetString("cluster", "port")
@@ -37,23 +38,22 @@ func Run(configPath string) {
 
 	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
-		log.Println("[error]", err)
-		return
+		log.Fatal(err.Error())
 	}
 
-	log.Println("started at port:", port)
+	log.Info("started at port: %s", port)
 	go messageListening(listener)
 
 	etcdc = getEtcdClient()
 	_, err = etcdc.CreateDir("hosts/", 0)
 	_, err = etcdc.CreateDir("containers/", 0)
 	etcdPort, _ := config.GetString("etcd", "port")
-	log.Println("etcd port:", etcdPort)
+	log.Info("etcd port: %s", etcdPort)
 
 	for {
 		err = hostinfoUpdate()
 		if err != nil {
-			log.Println("[error]", err)
+			log.Notice(err.Error())
 			etcdc = getEtcdClient()
 		}
 		time.Sleep(time.Second)
@@ -73,12 +73,12 @@ func CreateIntent(params map[string]string) error {
 		return err
 	}
 
-	log.Println("Intent: host", params["targetHost"])
-	log.Println("Intent: container", params["containerName"])
+	log.Info("Intent: host", params["targetHost"])
+	log.Info("Intent: container", params["containerName"])
 	if params["poolName"] != "" {
-		log.Println("Intent: pool", params["poolName"])
+		log.Info("Intent: pool", params["poolName"])
 	}
-	log.Println("Intent: image", params["image"])
+	log.Info("Intent: image", params["image"])
 
 	return nil
 }
@@ -88,7 +88,7 @@ func Cluster(poolName ...string) map[string]libscore.Hostinfo {
 
 	hosts, err := etcdc.Get("hosts/", true, true)
 	if err != nil {
-		log.Println("[error]", err)
+		log.Error(err.Error())
 		return result
 	}
 
@@ -96,7 +96,7 @@ func Cluster(poolName ...string) map[string]libscore.Hostinfo {
 		host := libscore.Hostinfo{}
 		err := json.Unmarshal([]byte(node.Value), &host)
 		if err != nil {
-			log.Println("[error]", err)
+			log.Error(err.Error())
 		}
 		if poolName != nil && poolName[0] != "" {
 			for _, h := range host.Pools {
@@ -121,7 +121,7 @@ func messageListening(listener net.Listener) {
 	for {
 		messageSocket, err := listener.Accept()
 		if err != nil {
-			log.Println("[error]", err)
+			log.Error(err.Error())
 			continue
 		}
 
@@ -129,7 +129,7 @@ func messageListening(listener net.Listener) {
 			defer messageSocket.Close()
 			err = json.NewDecoder(messageSocket).Decode(&message)
 			if err != nil {
-				log.Println("[error]", err)
+				log.Error("[error]", err)
 			}
 			switch message.Type {
 			case "container-create":
@@ -137,14 +137,14 @@ func messageListening(listener net.Listener) {
 
 				err := json.Unmarshal(message.Body, &containerName)
 				if err != nil {
-					log.Println("[error]", err)
+					log.Error("[error]", err)
 					fmt.Fprintf(messageSocket, "Error: "+err.Error())
 					return
 				}
 
 				result, err := createContainer(containerName)
 				if err != nil {
-					log.Println("[error]", err)
+					log.Error("[error]", err)
 					fmt.Fprintf(messageSocket, "Error: "+err.Error())
 					return
 				}
@@ -156,7 +156,7 @@ func messageListening(listener net.Listener) {
 				}
 				err := json.Unmarshal(message.Body, &Control)
 				if err != nil {
-					log.Println("[error]", err)
+					log.Error("[error]", err)
 				}
 				err = heaver.Control(Control.ContainerName, Control.Action)
 				if err != nil {
@@ -165,7 +165,7 @@ func messageListening(listener net.Listener) {
 					fmt.Fprintf(messageSocket, "ok")
 				}
 			default:
-				log.Println("unknown message")
+				log.Notice("unknown message")
 			}
 		}()
 	}
@@ -185,7 +185,7 @@ func createContainer(name string) (string, error) {
 			intentContainerStatus)
 	}
 
-	log.Println("creating container", name, "on host", Hostinfo.Hostname)
+	log.Notice("creating container", name, "on host", Hostinfo.Hostname)
 
 	_, err = etcdc.Delete("containers/"+name, false)
 	if err != nil {
@@ -201,7 +201,7 @@ func createContainer(name string) (string, error) {
 
 	err = hostinfoUpdate()
 	if err != nil {
-		log.Println("[error]", err)
+		log.Error(err.Error())
 	}
 
 	result, _ := json.Marshal(newContainer)

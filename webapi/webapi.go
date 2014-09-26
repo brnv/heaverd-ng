@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"math/rand"
 	"net"
 	"net/http"
@@ -17,6 +16,7 @@ import (
 	"heaverd-ng/tracker"
 
 	"github.com/brnv/web"
+	"github.com/op/go-logging"
 	"github.com/zazab/zhash"
 )
 
@@ -28,15 +28,16 @@ var (
 	rootRouter = web.New(Context{})
 	apiRouter  = rootRouter.Subrouter(Context{}, "/v2")
 	config     = zhash.NewHash()
+	log        = &logging.Logger{}
 )
 
 const etcdErrCodeKeyExists = "105"
 
-func Run(configPath string, seed int64) {
+func Run(configPath string, seed int64, logger *logging.Logger) {
+	log = logger
 	err := readConfig(configPath)
 	if err != nil {
-		log.Println("[error]", err)
-		return
+		log.Fatal(err.Error())
 	}
 	rand.Seed(seed)
 
@@ -65,13 +66,9 @@ func Run(configPath string, seed int64) {
 		Put("/h/:hid/:cid", handleHostContainerUpdate, "Обновить контейнер").
 		Get("/h/:hid/:cid", handleContainerInfo, "Информация о контейнере").
 		Get("/h/:hid/:cid/ping", handleContainerPing, "Пинг контейнера")
-	//Post("/h/:hid/:cid/freeze", ).
-	//Post("/h/:hid/:cid/unfreeze", ).
-	//Get("/h/:hid/:cid/tarball", ).
-	//Get("/h/:hid/:cid/attach", )
 
 	port, _ := config.GetString("web", "port")
-	log.Println("started at port:", port)
+	log.Info("started at port: %s", port)
 	log.Fatal(http.ListenAndServe(":"+port, rootRouter))
 }
 
@@ -136,7 +133,7 @@ func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 
 	targetHost, err := getPreferedHost(containerName, poolName)
 	if err != nil {
-		log.Println("[error]", err)
+		log.Error(err.Error())
 		http.Error(w, fmt.Sprintf("%v", err), 404)
 		return
 	}
