@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	createArgs  = []string{"heaver", "-Cn", "", "-i", "", "--net", "br0"}
+	createArgs  = []string{"heaver", "-CSn", "", "-i", "", "--net", "br0"}
 	controlArgs = []string{"heaver", "", ""}
 	startArg    = "-Sn"
 	stopArg     = "-Tn"

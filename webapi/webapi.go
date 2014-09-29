@@ -143,9 +143,15 @@ func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 		"poolName":      poolName,
 		"targetHost":    targetHost,
 	}
+
 	_, ok := r.Form["image"]
 	if ok {
 		params["image"] = r.Form["image"][0]
+	}
+
+	_, ok = r.Form["key"]
+	if ok {
+		params["key"] = r.Form["key"][0]
 	}
 
 	err = tracker.CreateIntent(params)

@@ -12,6 +12,7 @@ import (
 	"os"
 	"time"
 
+	"code.google.com/p/go.crypto/ssh"
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/op/go-logging"
 	"github.com/zazab/zhash"
@@ -22,6 +23,8 @@ var (
 	Hostinfo              = &libscore.Hostinfo{}
 	intentContainerStatus = "pending"
 	log                   = &logging.Logger{}
+	containerLogin        = "root"
+	containerPassword     = "123123"
 )
 
 var config = zhash.NewHash()
@@ -66,6 +69,7 @@ func CreateIntent(params map[string]string) error {
 		Host:   params["targetHost"],
 		Status: intentContainerStatus,
 		Image:  params["image"],
+		Key:    params["key"],
 	})
 
 	_, err := etcdc.Create("containers/"+params["containerName"], string(intent), 5)
@@ -142,13 +146,15 @@ func messageListening(listener net.Listener) {
 					return
 				}
 
-				result, err := createContainer(containerName)
+				newContainer, err := createContainer(containerName)
 				if err != nil {
 					log.Error("[error]", err)
 					fmt.Fprintf(messageSocket, "Error: "+err.Error())
 					return
 				}
-				fmt.Fprintf(messageSocket, result)
+
+				result, _ := json.Marshal(newContainer)
+				fmt.Fprintf(messageSocket, string(result))
 			case "container-control":
 				var Control struct {
 					ContainerName string
@@ -171,17 +177,17 @@ func messageListening(listener net.Listener) {
 	}
 }
 
-func createContainer(name string) (string, error) {
+func createContainer(name string) (newContainer lxc.Container, err error) {
 	rawContainer, _ := etcdc.Get("containers/"+name, false, false)
 
 	container := lxc.Container{}
-	err := json.Unmarshal([]byte(rawContainer.Node.Value), &container)
+	err = json.Unmarshal([]byte(rawContainer.Node.Value), &container)
 	if err != nil {
-		return "", err
+		return newContainer, err
 	}
 
 	if container.Status != intentContainerStatus {
-		return "", errors.New("Container is " + container.Status + ", not " +
+		return newContainer, errors.New("Container is " + container.Status + ", not " +
 			intentContainerStatus)
 	}
 
@@ -189,12 +195,12 @@ func createContainer(name string) (string, error) {
 
 	_, err = etcdc.Delete("containers/"+name, false)
 	if err != nil {
-		return "", err
+		return newContainer, err
 	}
 
-	newContainer, err := heaver.Create(container.Name, container.Image)
+	newContainer, err = heaver.Create(container.Name, container.Image)
 	if err != nil {
-		return "", err
+		return newContainer, err
 	}
 
 	newContainer.Host = Hostinfo.Hostname
@@ -204,8 +210,29 @@ func createContainer(name string) (string, error) {
 		log.Error(err.Error())
 	}
 
-	result, _ := json.Marshal(newContainer)
-	return string(result), nil
+	if container.Key != "" {
+		client, err := ssh.Dial("tcp", newContainer.Ip+":22", &ssh.ClientConfig{
+			User: containerLogin,
+			Auth: []ssh.AuthMethod{
+				ssh.Password(containerPassword),
+			},
+		})
+		if err != nil {
+			return newContainer, err
+		}
+		session, err := client.NewSession()
+		if err != nil {
+			return newContainer, err
+		}
+		if err != nil {
+			panic("Failed to dial: " + err.Error())
+		}
+
+		session.Run("echo '" + container.Key + "'>> /root/.ssh/authorized_keys")
+		session.Close()
+	}
+
+	return newContainer, nil
 }
 
 func hostinfoUpdate() error {

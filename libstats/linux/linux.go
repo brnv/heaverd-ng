@@ -25,13 +25,13 @@ func startCpuMeasure() CPUMeasure {
 	ch.err = make(chan error)
 	go func() {
 		for {
-			ticksBeforeSleep, err := lxc.CpuTicks()
+			ticksBeforeSleep, err := lxc.GetCpuTicks()
 			if err != nil {
 				ch.err <- err
 				continue
 			}
 			time.Sleep(time.Second)
-			ticksAfterSleep, err := lxc.CpuTicks()
+			ticksAfterSleep, err := lxc.GetCpuTicks()
 			if err != nil {
 				ch.err <- err
 				continue
