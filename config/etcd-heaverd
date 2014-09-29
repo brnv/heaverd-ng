@@ -1,0 +1,5 @@
+ETCD_NAME=%HOST%
+ETCD_ADDR=%HOST%:4001
+ETCD_PEER_ADDR=%HOST%:7001
+ETCD_DATA_DIR=/var/lib/etcd/heaverd
+ETCD_DISCOVERY=https://discovery.etcd.io/%DISCOVERY_ID%
