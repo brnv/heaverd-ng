@@ -1,0 +1,47 @@
+# Maintainer: Alexey Baranov <a.baranov@office.ngs.ru>
+
+pkgname=heaverd-ng
+pkgver=b3bb47
+pkgrel=1
+pkgdesc="Balancer and restapi frontend for heaver"
+arch=('x86_64')
+url="http://git.rn/projects/OAPP/repos/heaverd-ng/"
+license=('unknown')
+depends=('etcd')
+install='install.sh'
+md5sums=() #generate with 'makepkg -g'
+
+pkgver() {
+	cd $srcdir
+	VERSION=`git show-ref | grep dev | head -n1 | cut -c 1-6`
+	printf $VERSION
+}
+
+prepare() {
+	rm -rf $srcdir/*
+	rm -rf $srcdir/.git
+	rm -f $GOPATH/src/heaverd-ng
+}
+
+build() {
+	sudo -ua.baranov git clone ssh://git@git.rn:7999/oapp/heaverd-ng.git $srcdir
+	ln -s $srcdir $GOPATH/src/heaverd-ng
+	cd $srcdir
+	git checkout dev
+	go build main.go
+}
+
+package() {
+	mkdir -p $pkgdir/usr/bin/
+	mkdir -p $pkgdir/usr/share/heaverd-ng
+	mkdir -p $pkgdir/etc/heaverd-ng/
+	mkdir -p $pkgdir/etc/conf.d/
+	mkdir -p $pkgdir/usr/lib/systemd/system/
+
+	cp $srcdir/main $pkgdir/usr/bin/heaverd-ng
+	cp $srcdir/config/heaverd-ng.conf.toml $pkgdir/etc/heaverd-ng/
+	cp -r $srcdir/www/templates $pkgdir/usr/share/heaverd-ng/
+	cp $srcdir/config/etcd-heaverd-ng $pkgdir/etc/conf.d/
+	cp $srcdir/systemd/etcd-heaverd-ng.service $pkgdir/usr/lib/systemd/system/
+	cp $srcdir/systemd/heaverd-ng.service $pkgdir/usr/lib/systemd/system/
+}
