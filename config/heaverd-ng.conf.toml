@@ -1,9 +1,9 @@
 [cluster]
 port = "1444"
-pools = ["test"]
+pools = ["default"]
 [web]
 port = "8081"
 [templates]
-dir = "/mnt/a.baranov/www/templates/"
+dir = "/usr/share/heaverd-ng/templates/"
 [etcd]
 port = "4001"
