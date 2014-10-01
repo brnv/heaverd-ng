@@ -8,12 +8,12 @@ import (
 )
 
 type Container struct {
-	Name   string `json:"name"`
-	Host   string `json:"host"`
-	Status string `json:"status"`
-	Image  string `json:"image"`
-	Ip     string `json:"ip"`
-	Key    string `json:"key"`
+	Name   string   `json:"name"`
+	Host   string   `json:"host"`
+	Status string   `json:"status"`
+	Image  []string `json:"image"`
+	Ip     string   `json:"ip"`
+	Key    string   `json:"key"`
 }
 
 // CpuTicks возвращает метрику использования процессора контейнером,

@@ -10,9 +10,8 @@
 	<script type="text/javascript" charset="utf-8">
 		var fetchData = function() {
 			$.ajax({
-				url: "http://container.s:8081/v2/h",
-				success: function(data) {
-					hosts = $.parseJSON(data);
+				url: "/v2/h",
+				success: function(hosts) {
 					render(hosts);
 				}
 			});

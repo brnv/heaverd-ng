@@ -21,7 +21,12 @@ import (
 )
 
 type (
-	Context struct{}
+	Context   struct{}
+	ApiAnswer struct {
+		Status string `json:"status"`
+		Msg    string `json:"msg"`
+		Error  string `json:"error"`
+	}
 )
 
 var (
@@ -41,12 +46,12 @@ func Run(configPath string, seed int64, logger *logging.Logger) {
 	}
 	rand.Seed(seed)
 
-	rootRouter.Middleware(web.LoggerMiddleware).
-		Middleware(web.ShowErrorsMiddleware).
+	rootRouter.
 		Middleware(web.StaticMiddleware("www")).
 		Get("/score", handleScore, "Графики пулов хостов")
 
-	apiRouter.Get("/", handleHelp, "Справка по API").
+	apiRouter.
+		Get("/", handleHelp, "Справка по API").
 		Get("/h/:hid/stats", handleStats, "Статистика хоста :hid").
 		Get("/h/", handleHostList, "Список всех хостов").
 		Head("/c/:cid", handleHostByContainer, "Найти хост по контейнеру").
@@ -97,36 +102,25 @@ func handleStats(w web.ResponseWriter, r *web.Request) {
 }
 
 func handleHostList(w web.ResponseWriter, r *web.Request) {
-	r.Header.Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json")
 	cluster, _ := json.Marshal(tracker.Cluster())
 	fmt.Fprint(w, string(cluster))
 }
 
-func handleHostOperation(w web.ResponseWriter, r *web.Request) {
-	http.Error(w, "", 501)
-}
-
-func handleHostContainersList(w web.ResponseWriter, r *web.Request) {
-	http.Error(w, "", 501)
-}
-
-func handleHostPing(w web.ResponseWriter, r *web.Request) {
-	http.Error(w, "pong", 204)
-}
-
-func handleClusterContainersList(w web.ResponseWriter, r *web.Request) {
-	http.Error(w, "Список всех контейнеров на всех хостах", 501)
-}
-
-func handleHostByContainer(w web.ResponseWriter, r *web.Request) {
-	http.Error(w, "Имя хоста, на котором расположен указанный контейнер", 501)
-}
-
-func handleHostInformationRequest(w web.ResponseWriter, r *web.Request) {
-	http.Error(w, "Полная информация о хосте", 501)
-}
-
 func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
+	params := struct {
+		Image         []string `json:"image"`
+		Key           string   `json:"key"`
+		ContainerName string
+		PoolName      string
+		TargetHost    string
+	}{}
+
+	err := json.NewDecoder(r.Body).Decode(&params)
+	if err != nil {
+		log.Error(err.Error())
+	}
+
 	r.ParseForm()
 	containerName := r.PathParams["cid"]
 	poolName := r.PathParams["poolid"]
@@ -134,56 +128,37 @@ func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 	targetHost, err := getPreferedHost(containerName, poolName)
 	if err != nil {
 		log.Error(err.Error())
-		http.Error(w, fmt.Sprintf("%v", err), 404)
+		apiAnswer(w, "error", "", fmt.Sprintf("%v", err), http.StatusNotFound)
 		return
 	}
 
-	params := map[string]string{
-		"containerName": containerName,
-		"poolName":      poolName,
-		"targetHost":    targetHost,
-	}
+	params.ContainerName = containerName
+	params.PoolName = poolName
+	params.TargetHost = targetHost
 
-	_, ok := r.Form["image"]
-	if ok {
-		params["image"] = r.Form["image"][0]
-	}
-
-	_, ok = r.Form["key"]
-	if ok {
-		params["key"] = r.Form["key"][0]
-	}
-
-	err = tracker.CreateIntent(params)
+	err = tracker.CreateIntent(params.PoolName, params.ContainerName,
+		params.TargetHost, params.Image, params.Key)
 	if err != nil {
 		if strings.Contains(err.Error(), etcdErrCodeKeyExists) {
-			http.Error(w, "Not unique name", 409)
+			apiAnswer(w, "error", "", "Not unique name", http.StatusConflict)
 		}
 		return
 	}
 
-	createMessage := makeMessage("container-create", params["containerName"])
+	createMessage := makeMessage("container-create", params.ContainerName)
 
 	peerAddr, _ := config.GetString("cluster", "port")
 	hostAnswer, _ := sendTcpMessage(targetHost+":"+peerAddr, createMessage)
 
 	if strings.Contains(hostAnswer, "Error") {
-		http.Error(w, hostAnswer, 400)
+		apiAnswer(w, "error", "", hostAnswer, http.StatusNotFound)
 		return
 	}
 
-	http.Error(w, hostAnswer, 201)
+	apiAnswer(w, "ok", hostAnswer, "", http.StatusCreated)
 }
 
-func handleHostContainerCreate(w web.ResponseWriter, r *web.Request) {
-	http.Error(w, "Создать контейнер на этом хосте", 501)
-}
-
-func handleHostContainerUpdate(w web.ResponseWriter, r *web.Request) {
-	http.Error(w, "Обновить настройки контейнера", 501)
-}
-
-func handleContainerDestroy(w web.ResponseWriter, r *web.Request) {
+func containerControl(action string, w web.ResponseWriter, r *web.Request) {
 	var hostname string
 	containerName := r.PathParams["cid"]
 
@@ -192,18 +167,18 @@ func handleContainerDestroy(w web.ResponseWriter, r *web.Request) {
 	} else {
 		hostname = getHostnameByContainer(containerName)
 		if hostname == "" {
-			http.Error(w, "Unknown container", 404)
+			apiAnswer(w, "error", "", "unknown container", http.StatusNotFound)
 			return
 		}
 	}
 
 	if !checkHostname(hostname) {
-		http.Error(w, "Unknown host", 404)
+		apiAnswer(w, "error", "", "unknown host", http.StatusNotFound)
 		return
 	}
 
 	if !checkContainer(hostname, containerName) {
-		http.Error(w, "Unknown container", 404)
+		apiAnswer(w, "error", "", "unknown container", http.StatusNotFound)
 		return
 	}
 
@@ -212,109 +187,28 @@ func handleContainerDestroy(w web.ResponseWriter, r *web.Request) {
 		Action        string
 	}{
 		containerName,
-		"destroy",
+		action,
 	})
 
 	peerAddr, _ := config.GetString("cluster", "port")
 	answer, _ := sendTcpMessage(hostname+":"+peerAddr, controlMessage)
 	switch answer {
 	case "ok":
-		http.Error(w, "", 204)
+		apiAnswer(w, "ok", "", "", http.StatusNoContent)
 	default:
-		http.Error(w, answer, 409)
+		apiAnswer(w, "error", "", answer, http.StatusConflict)
 	}
 }
 
-func handleContainerInfo(w web.ResponseWriter, r *web.Request) {
-	http.Error(w, "Получить инфороцию о контейнере", 501)
-}
-
-func handleContainerStart(w web.ResponseWriter, r *web.Request) {
-	var hostname string
-	containerName := r.PathParams["cid"]
-
-	if _, ok := r.PathParams["hid"]; ok {
-		hostname = r.PathParams["hid"]
-	} else {
-		hostname = getHostnameByContainer(containerName)
-		if hostname == "" {
-			http.Error(w, "Unknown container", 404)
-			return
-		}
-	}
-
-	if !checkHostname(hostname) {
-		http.Error(w, "Unknown host", 404)
-		return
-	}
-
-	if !checkContainer(hostname, containerName) {
-		http.Error(w, "Unknown container", 404)
-		return
-	}
-
-	controlMessage := makeMessage("container-control", struct {
-		ContainerName string
-		Action        string
-	}{
-		containerName,
-		"start",
+func apiAnswer(w web.ResponseWriter, status string, msg string, err string, code int) {
+	w.Header().Set("Content-Type", "application/json")
+	answer, _ := json.Marshal(ApiAnswer{
+		Status: status,
+		Msg:    msg,
+		Error:  err,
 	})
-
-	peerAddr, _ := config.GetString("cluster", "port")
-	answer, _ := sendTcpMessage(hostname+":"+peerAddr, controlMessage)
-	switch answer {
-	case "ok":
-		http.Error(w, "", 204)
-	default:
-		http.Error(w, answer, 409)
-	}
-}
-
-func handleContainerStop(w web.ResponseWriter, r *web.Request) {
-	var hostname string
-	containerName := r.PathParams["cid"]
-
-	if _, ok := r.PathParams["hid"]; ok {
-		hostname = r.PathParams["hid"]
-	} else {
-		hostname = getHostnameByContainer(containerName)
-		if hostname == "" {
-			http.Error(w, "Unknown container", 404)
-			return
-		}
-	}
-
-	if !checkHostname(hostname) {
-		http.Error(w, "Unknown host", 404)
-		return
-	}
-
-	if !checkContainer(hostname, containerName) {
-		http.Error(w, "Unknown container", 404)
-		return
-	}
-
-	controlMessage := makeMessage("container-control", struct {
-		ContainerName string
-		Action        string
-	}{
-		containerName,
-		"stop",
-	})
-
-	peerAddr, _ := config.GetString("cluster", "port")
-	answer, _ := sendTcpMessage(hostname+":"+peerAddr, controlMessage)
-	switch answer {
-	case "ok":
-		http.Error(w, "", 204)
-	default:
-		http.Error(w, answer, 409)
-	}
-}
-
-func handleContainerPing(w web.ResponseWriter, r *web.Request) {
-	http.Error(w, "Пингануть сервер", 501)
+	w.WriteHeader(code)
+	fmt.Fprint(w, string(answer))
 }
 
 func getPreferedHost(containerName string, poolName string) (string, error) {
@@ -384,4 +278,44 @@ func readConfig(path string) error {
 	} else {
 		return err
 	}
+}
+
+func handleHostContainerCreate(w web.ResponseWriter, r *web.Request) {
+	http.Error(w, "Создать контейнер на этом хосте", 501)
+}
+func handleHostContainerUpdate(w web.ResponseWriter, r *web.Request) {
+	http.Error(w, "Обновить настройки контейнера", 501)
+}
+func handleContainerStart(w web.ResponseWriter, r *web.Request) {
+	containerControl("start", w, r)
+}
+func handleContainerStop(w web.ResponseWriter, r *web.Request) {
+	containerControl("stop", w, r)
+}
+func handleContainerDestroy(w web.ResponseWriter, r *web.Request) {
+	containerControl("destroy", w, r)
+}
+func handleContainerInfo(w web.ResponseWriter, r *web.Request) {
+	http.Error(w, "Получить инфороцию о контейнере", 501)
+}
+func handleContainerPing(w web.ResponseWriter, r *web.Request) {
+	http.Error(w, "Пингануть сервер", 501)
+}
+func handleHostOperation(w web.ResponseWriter, r *web.Request) {
+	http.Error(w, "", 501)
+}
+func handleHostContainersList(w web.ResponseWriter, r *web.Request) {
+	http.Error(w, "", 501)
+}
+func handleHostPing(w web.ResponseWriter, r *web.Request) {
+	http.Error(w, "pong", 204)
+}
+func handleClusterContainersList(w web.ResponseWriter, r *web.Request) {
+	http.Error(w, "Список всех контейнеров на всех хостах", 501)
+}
+func handleHostByContainer(w web.ResponseWriter, r *web.Request) {
+	http.Error(w, "Имя хоста, на котором расположен указанный контейнер", 501)
+}
+func handleHostInformationRequest(w web.ResponseWriter, r *web.Request) {
+	http.Error(w, "Полная информация о хосте", 501)
 }

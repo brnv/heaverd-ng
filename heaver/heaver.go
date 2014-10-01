@@ -9,23 +9,33 @@ import (
 )
 
 var (
-	createArgs  = []string{"heaver", "-CSn", "", "-i", "", "--net", "br0"}
-	controlArgs = []string{"heaver", "", ""}
-	startArg    = "-Sn"
-	stopArg     = "-Tn"
-	destroyArg  = "-Dn"
-	reIp        = regexp.MustCompile("(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})")
-	reStarted   = regexp.MustCompile("started")
-	reStopped   = regexp.MustCompile("stopped")
-	reDestroyed = regexp.MustCompile("destroyed")
-	reList      = regexp.MustCompile(`\s*([\d\w-\.]*):\s([a-z]*).*:\s([\d\.]*)/`)
+	createArgs       = []string{"heaver", "-CSn", ""}
+	netInterfaceArgs = []string{"--net", "br0"}
+	controlArgs      = []string{"heaver", "", ""}
+	startArg         = "-Sn"
+	stopArg          = "-Tn"
+	destroyArg       = "-Dn"
+	reIp             = regexp.MustCompile("(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})")
+	reStarted        = regexp.MustCompile("started")
+	reStopped        = regexp.MustCompile("stopped")
+	reDestroyed      = regexp.MustCompile("destroyed")
+	reList           = regexp.MustCompile(`\s*([\d\w-\.]*):\s([a-z]*).*:\s([\d\.]*)/`)
 )
 
-func Create(containerName string, image string) (lxc.Container, error) {
+func Create(containerName string, image []string) (lxc.Container, error) {
 	createArgs[2] = containerName
-	createArgs[4] = image
 
-	cmd := getHeaverCmd(createArgs)
+	args := createArgs
+	for _, i := range image {
+		args = append(args, "-i")
+		args = append(args, i)
+	}
+	for _, n := range netInterfaceArgs {
+		args = append(args, n)
+	}
+
+	cmd := getHeaverCmd(args)
+
 	output, err := cmd.Output()
 	if err != nil {
 		return lxc.Container{Status: "error"}, errors.New(string(output))

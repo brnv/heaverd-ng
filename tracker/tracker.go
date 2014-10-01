@@ -63,26 +63,29 @@ func Run(configPath string, logger *logging.Logger) {
 	}
 }
 
-func CreateIntent(params map[string]string) error {
+func CreateIntent(
+	poolName string, containerName string, targetHost string,
+	image []string, key string,
+) error {
 	intent, _ := json.Marshal(lxc.Container{
-		Name:   params["containerName"],
-		Host:   params["targetHost"],
+		Name:   containerName,
+		Host:   targetHost,
 		Status: intentContainerStatus,
-		Image:  params["image"],
-		Key:    params["key"],
+		Image:  image,
+		Key:    key,
 	})
 
-	_, err := etcdc.Create("containers/"+params["containerName"], string(intent), 5)
+	_, err := etcdc.Create("containers/"+containerName, string(intent), 5)
 	if err != nil {
 		return err
 	}
 
-	log.Info("Intent: host", params["targetHost"])
-	log.Info("Intent: container", params["containerName"])
-	if params["poolName"] != "" {
-		log.Info("Intent: pool", params["poolName"])
+	log.Info("Intent: host", targetHost)
+	log.Info("Intent: container", containerName)
+	if poolName != "" {
+		log.Info("Intent: pool", poolName)
 	}
-	log.Info("Intent: image", params["image"])
+	log.Info("Intent: image", image)
 
 	return nil
 }
@@ -223,9 +226,6 @@ func createContainer(name string) (newContainer lxc.Container, err error) {
 		session, err := client.NewSession()
 		if err != nil {
 			return newContainer, err
-		}
-		if err != nil {
-			panic("Failed to dial: " + err.Error())
 		}
 
 		session.Run("echo '" + container.Key + "'>> /root/.ssh/authorized_keys")
