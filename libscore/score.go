@@ -2,10 +2,7 @@ package libscore
 
 import (
 	"crypto/sha1"
-	"errors"
-	"fmt"
 	"math"
-	"sort"
 )
 
 type Profile struct {
@@ -32,45 +29,7 @@ type Segment struct {
 	X, Y     float64
 }
 
-type HostsRange []Segment
-
-func (s HostsRange) Len() int           { return len(s) }
-func (s HostsRange) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-func (s HostsRange) Less(i, j int) bool { return s[i].Hostname < s[j].Hostname }
-
-func Segments(hosts map[string]Hostinfo) []Segment {
-	segments := []Segment{}
-	scoreSum := 0.0
-	for _, host := range hosts {
-		score := Score(host, DefaultProfile)
-		segments = append(segments, Segment{
-			Hostname: host.Hostname,
-			Score:    score,
-		})
-		scoreSum += score
-	}
-	sort.Sort(HostsRange(segments))
-	shift := 0.0
-	for i := range segments {
-		segments[i].X = shift
-		segments[i].Y = segments[i].Score/scoreSum + shift
-		shift = segments[i].Y
-	}
-	return segments
-}
-
-func ChooseHost(containerName string, segments []Segment) (host string, err error) {
-	point := hash(containerName)
-	for _, segment := range segments {
-		if point >= segment.X && point <= segment.Y {
-			return segment.Hostname, nil
-		}
-	}
-	return "", errors.New(
-		fmt.Sprintf("Cannot assign any host to container name %v", containerName))
-}
-
-func Score(host Hostinfo, profile Profile) float64 {
+func GetScore(host Hostinfo, profile Profile) float64 {
 	uptimeFactor := 2 * math.Atan(float64(host.Uptime)/
 		float64(profile.UptimeFactor)) / math.Pi
 

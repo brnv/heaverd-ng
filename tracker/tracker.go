@@ -1,56 +1,55 @@
 package tracker
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"heaverd-ng/heaver"
 	"heaverd-ng/libscore"
 	"heaverd-ng/libstats/lxc"
 	"net"
-	"os"
 	"time"
 
 	"code.google.com/p/go.crypto/ssh"
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/op/go-logging"
-	"github.com/zazab/zhash"
 )
 
 var (
 	etcdc                 = &etcd.Client{}
 	Hostinfo              = &libscore.Hostinfo{}
 	intentContainerStatus = "pending"
-	log                   = &logging.Logger{}
+	log                   = logging.MustGetLogger("heaverd-ng")
 	containerLogin        = "root"
 	containerPassword     = "123123"
+	clusterPort           string
+	clusterPools          []string
+	etcdPort              string
 )
 
-var config = zhash.NewHash()
+type Intent struct {
+	Image         []string `json:"image"`
+	Key           string   `json:"key"`
+	ContainerName string
+	PoolName      string
+	TargetHost    string
+}
 
-func Run(configPath string, logger *logging.Logger) {
-	log = logger
-	err := readConfig(configPath)
+func Run(params map[string]interface{}) {
+	clusterPort = params["clusterPort"].(string)
+	Hostinfo.Pools = params["clusterPools"].([]string)
+	etcdPort = params["etcdPort"].(string)
+
+	listener, err := net.Listen("tcp", ":"+clusterPort)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
-	port, _ := config.GetString("cluster", "port")
-	Hostinfo.Pools, _ = config.GetStringSlice("cluster", "pools")
-
-	listener, err := net.Listen("tcp", ":"+port)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-
-	log.Info("started at port: %s", port)
+	log.Info("started at port: %s", clusterPort)
 	go messageListening(listener)
 
 	etcdc = getEtcdClient()
 	_, err = etcdc.CreateDir("hosts/", 0)
 	_, err = etcdc.CreateDir("containers/", 0)
-	etcdPort, _ := config.GetString("etcd", "port")
 	log.Info("etcd port: %s", etcdPort)
 
 	for {
@@ -63,30 +62,18 @@ func Run(configPath string, logger *logging.Logger) {
 	}
 }
 
-func CreateIntent(
-	poolName string, containerName string, targetHost string,
-	image []string, key string,
-) error {
-	intent, _ := json.Marshal(lxc.Container{
-		Name:   containerName,
-		Host:   targetHost,
+func CreateIntent(intent Intent) error {
+	intentContainer, _ := json.Marshal(lxc.Container{
+		Name:   intent.ContainerName,
+		Host:   intent.TargetHost,
 		Status: intentContainerStatus,
-		Image:  image,
-		Key:    key,
+		Image:  intent.Image,
+		Key:    intent.Key,
 	})
-
-	_, err := etcdc.Create("containers/"+containerName, string(intent), 5)
+	_, err := etcdc.Create("containers/"+intent.ContainerName, string(intentContainer), 5)
 	if err != nil {
 		return err
 	}
-
-	log.Info("Intent: host", targetHost)
-	log.Info("Intent: container", containerName)
-	if poolName != "" {
-		log.Info("Intent: pool", poolName)
-	}
-	log.Info("Intent: image", image)
-
 	return nil
 }
 
@@ -145,19 +132,19 @@ func messageListening(listener net.Listener) {
 				err := json.Unmarshal(message.Body, &containerName)
 				if err != nil {
 					log.Error("[error]", err)
-					fmt.Fprintf(messageSocket, "Error: "+err.Error())
+					messageSocket.Write([]byte("Error:" + err.Error()))
 					return
 				}
 
 				newContainer, err := createContainer(containerName)
 				if err != nil {
 					log.Error("[error]", err)
-					fmt.Fprintf(messageSocket, "Error: "+err.Error())
+					messageSocket.Write([]byte("Error:" + err.Error()))
 					return
 				}
 
 				result, _ := json.Marshal(newContainer)
-				fmt.Fprintf(messageSocket, string(result))
+				messageSocket.Write(result)
 			case "container-control":
 				var Control struct {
 					ContainerName string
@@ -169,9 +156,9 @@ func messageListening(listener net.Listener) {
 				}
 				err = heaver.Control(Control.ContainerName, Control.Action)
 				if err != nil {
-					fmt.Fprintf(messageSocket, "Error: "+err.Error())
+					messageSocket.Write([]byte("Error:" + err.Error()))
 				} else {
-					fmt.Fprintf(messageSocket, "ok")
+					messageSocket.Write([]byte("ok"))
 				}
 			default:
 				log.Notice("unknown message")
@@ -259,16 +246,5 @@ func hostinfoUpdate() error {
 }
 
 func getEtcdClient() *etcd.Client {
-	port, _ := config.GetString("etcd", "port")
-	return etcd.NewClient([]string{"http://localhost:" + port})
-}
-
-func readConfig(path string) error {
-	f, err := os.Open(path)
-	if err == nil {
-		config.ReadHash(bufio.NewReader(f))
-		return nil
-	} else {
-		return err
-	}
+	return etcd.NewClient([]string{"http://localhost:" + etcdPort})
 }

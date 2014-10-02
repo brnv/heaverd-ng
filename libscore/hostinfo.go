@@ -91,7 +91,7 @@ func (host *Hostinfo) Refresh() error {
 		Pools:         host.Pools,
 	}
 
-	host.Score = Score(*host, DefaultProfile)
+	host.Score = GetScore(*host, DefaultProfile)
 
 	return nil
 }

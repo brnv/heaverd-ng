@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"heaverd-ng/tracker"
 	"heaverd-ng/webapi"
 	"os"
@@ -9,13 +10,15 @@ import (
 
 	"github.com/docopt/docopt.go"
 	"github.com/op/go-logging"
+	"github.com/zazab/zhash"
 )
 
 var (
 	configPath = "/etc/heaverd-ng/heaverd-ng.conf.toml"
 	log        = logging.MustGetLogger("heaverd-ng")
 	logfile    = os.Stderr
-	format     = "%{time:15:04:05.000000} %{pid} %{level:.8s} %{message}"
+	format     = "%{time:15:04:05.000000} %{pid} %{level:.8s} %{longfile} %{message}"
+	config     = zhash.NewHash()
 )
 
 var usage = `Heaverd-ng.
@@ -39,9 +42,45 @@ func main() {
 	logging.SetFormatter(logging.MustStringFormatter(format))
 	logging.SetLevel(loglevel, log.Module)
 
+	err := readConfig(configPath)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	webPort, _ := config.GetString("web", "port")
+	templatesDir, _ := config.GetString("templates", "dir")
+	clusterPort, _ := config.GetString("cluster", "port")
+	clusterPools, _ := config.GetStringSlice("cluster", "pools")
+	etcdPort, _ := config.GetString("etcd", "port")
+
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
-	go func() { webapi.Run(configPath, time.Now().UnixNano(), log); wg.Done() }()
-	go func() { tracker.Run(configPath, log); wg.Done() }()
+	go func() {
+		webapi.Run(map[string]interface{}{
+			"webPort":      webPort,
+			"templatesDir": templatesDir,
+			"clusterPort":  clusterPort,
+			"seed":         time.Now().UnixNano(),
+		})
+		wg.Done()
+	}()
+	go func() {
+		tracker.Run(map[string]interface{}{
+			"clusterPort":  clusterPort,
+			"clusterPools": clusterPools,
+			"etcdPort":     etcdPort,
+		})
+		wg.Done()
+	}()
 	wg.Wait()
+}
+
+func readConfig(path string) error {
+	f, err := os.Open(path)
+	if err == nil {
+		config.ReadHash(bufio.NewReader(f))
+		return nil
+	} else {
+		return err
+	}
 }
