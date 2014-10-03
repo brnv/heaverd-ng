@@ -2,7 +2,7 @@ package libscore
 
 import (
 	"fmt"
-	"heaverd-ng/heaver"
+	"git.rn/go-heaver"
 	"heaverd-ng/libstats/linux"
 	"heaverd-ng/libstats/lxc"
 	"heaverd-ng/libstats/zfs"

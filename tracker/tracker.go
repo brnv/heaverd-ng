@@ -3,7 +3,7 @@ package tracker
 import (
 	"encoding/json"
 	"errors"
-	"heaverd-ng/heaver"
+	"git.rn/go-heaver"
 	"heaverd-ng/libscore"
 	"heaverd-ng/libstats/lxc"
 	"net"
