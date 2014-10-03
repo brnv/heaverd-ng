@@ -1,8 +1,8 @@
 post_install() {
-	DISCOVERY_ID="b76d02d3fde927b6de56bd3b925c87d6"
+	DISCOVERY_HOST="yaci.yard.s:4441"
 	HOST=`hostname`
-	sed -i "s/%HOST%/$HOST/" /etc/conf.d/etcd-heaverd-ng
-	sed -i "s/%DISCOVERY_ID%/$DISCOVERY_ID/" /etc/conf.d/etcd-heaverd-ng
+	sed -i "s/%HOST%/$HOST/" /etc/conf.d/etcd-{heaverd-ng,discovery}
+	sed -i "s/%DISCOVERY_HOST%/$DISCOVERY_HOST/" /etc/conf.d/etcd-heaverd-ng
 }
 
 post_remove() {

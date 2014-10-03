@@ -1,7 +1,7 @@
 # Maintainer: Alexey Baranov <a.baranov@office.ngs.ru>
 
 pkgname=heaverd-ng
-pkgver=b3bb47
+pkgver=082861
 pkgrel=1
 pkgdesc="Balancer and restapi frontend for heaver"
 arch=('x86_64')
@@ -41,7 +41,11 @@ package() {
 	cp $srcdir/main $pkgdir/usr/bin/heaverd-ng
 	cp $srcdir/config/heaverd-ng.conf.toml $pkgdir/etc/heaverd-ng/
 	cp -r $srcdir/www/templates $pkgdir/usr/share/heaverd-ng/
+
 	cp $srcdir/config/etcd-heaverd-ng $pkgdir/etc/conf.d/
+	cp $srcdir/config/etcd-discovery $pkgdir/etc/conf.d/
+
 	cp $srcdir/systemd/etcd-heaverd-ng.service $pkgdir/usr/lib/systemd/system/
 	cp $srcdir/systemd/heaverd-ng.service $pkgdir/usr/lib/systemd/system/
+	cp $srcdir/systemd/etcd-discovery.service $pkgdir/usr/lib/systemd/system/
 }

@@ -6,4 +6,4 @@ port = "8081"
 [templates]
 dir = "/usr/share/heaverd-ng/templates/"
 [etcd]
-port = "4001"
+port = "4041"
