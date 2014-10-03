@@ -13,7 +13,7 @@ import (
 	"heaverd-ng/libscore"
 	"heaverd-ng/tracker"
 
-	"github.com/brnv/web"
+	"git.rn/go-web"
 	"github.com/op/go-logging"
 )
 
