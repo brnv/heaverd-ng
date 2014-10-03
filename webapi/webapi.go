@@ -136,7 +136,7 @@ func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 
 	createMessage := makeMessage("container-create", intent.ContainerName)
 
-	hostAnswer, _ := sendTcpMessage(targetHost+":"+clusterPort, createMessage)
+	hostAnswer, _ := sendTcpMessage(targetHost, clusterPort, createMessage)
 
 	if strings.Contains(hostAnswer, "Error") {
 		apiAnswer(w, "error", "", hostAnswer, http.StatusNotFound)
@@ -190,7 +190,7 @@ func controlContainer(action string, w web.ResponseWriter, r *web.Request) {
 		action,
 	})
 
-	answer, _ := sendTcpMessage(hostname+":"+clusterPort, controlMessage)
+	answer, _ := sendTcpMessage(hostname, clusterPort, controlMessage)
 	switch answer {
 	case "ok":
 		apiAnswerOk(w)
@@ -233,8 +233,8 @@ func getPreferedHost(containerName string, poolName string) (string, error) {
 	return host, nil
 }
 
-func sendTcpMessage(host string, message []byte) (string, error) {
-	connection, err := net.Dial("tcp", host)
+func sendTcpMessage(host string, port string, message []byte) (string, error) {
+	connection, err := net.Dial("tcp", host+":"+port)
 	defer connection.Close()
 	if err != nil {
 		return "", err
