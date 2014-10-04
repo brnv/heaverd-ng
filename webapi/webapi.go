@@ -10,10 +10,9 @@ import (
 	"strings"
 	"text/template"
 
-	"heaverd-ng/libscore"
-	"heaverd-ng/tracker"
-
-	"git.rn/go-web"
+	"github.com/brnv/go-web"
+	"github.com/brnv/heaverd-ng/libscore"
+	"github.com/brnv/heaverd-ng/tracker"
 	"github.com/op/go-logging"
 )
 

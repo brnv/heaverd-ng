@@ -2,8 +2,8 @@ package main
 
 import (
 	"bufio"
-	"heaverd-ng/tracker"
-	"heaverd-ng/webapi"
+	"github.com/brnv/heaverd-ng/tracker"
+	"github.com/brnv/heaverd-ng/webapi"
 	"os"
 	"sync"
 	"time"
@@ -17,7 +17,7 @@ var (
 	configPath = "/etc/heaverd-ng/heaverd-ng.conf.toml"
 	log        = logging.MustGetLogger("heaverd-ng")
 	logfile    = os.Stderr
-	format     = "%{time:15:04:05.000000} %{pid} %{level:.8s} %{longfile} %{message}"
+	format     = "%{time:15:04:05.000000} %{pid} %{level:.8s} %{message}"
 	config     = zhash.NewHash()
 )
 
@@ -31,7 +31,7 @@ var usage = `Heaverd-ng.
 	--config=<path>		Configuration file [default: /etc/heaverd-ng/heaverd-ng.conf.toml].`
 
 func main() {
-	args, _ := docopt.Parse(usage, nil, true, "Heaverd-ng 1.0", false)
+	args, _ := docopt.Parse(usage, nil, true, "heaverd-ng", false)
 
 	if args["--config"] != nil {
 		configPath = string(args["--config"].(string))

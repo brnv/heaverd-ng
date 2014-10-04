@@ -1,7 +1,7 @@
 package linux
 
 import (
-	"heaverd-ng/libstats/lxc"
+	"github.com/brnv/go-lxc"
 	"net"
 	"os"
 	"os/exec"

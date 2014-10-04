@@ -2,10 +2,10 @@ package libscore
 
 import (
 	"fmt"
-	"git.rn/go-heaver"
-	"heaverd-ng/libstats/linux"
-	"heaverd-ng/libstats/lxc"
-	"heaverd-ng/libstats/zfs"
+	"github.com/brnv/go-heaver"
+	"github.com/brnv/go-lxc"
+	"github.com/brnv/heaverd-ng/libstats/linux"
+	"github.com/brnv/heaverd-ng/libstats/zfs"
 )
 
 type Hostinfo struct {
