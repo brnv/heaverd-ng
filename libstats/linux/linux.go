@@ -1,10 +1,12 @@
 package linux
 
 import (
+	"os/exec"
+
 	"github.com/brnv/go-lxc"
+
 	"net"
 	"os"
-	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"

@@ -2,16 +2,17 @@ package tracker
 
 import (
 	"encoding/json"
-	"errors"
+
+	"code.google.com/p/go.crypto/ssh"
 	"github.com/brnv/go-heaver"
 	"github.com/brnv/go-lxc"
 	"github.com/brnv/heaverd-ng/libscore"
-	"net"
-	"time"
-
-	"code.google.com/p/go.crypto/ssh"
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/op/go-logging"
+
+	"errors"
+	"net"
+	"time"
 )
 
 var (

@@ -1,19 +1,20 @@
 package webapi
 
 import (
-	"bufio"
 	"encoding/json"
-	"io"
-	"math/rand"
-	"net"
-	"net/http"
-	"strings"
-	"text/template"
+	"html/template"
 
 	"github.com/brnv/go-web"
 	"github.com/brnv/heaverd-ng/libscore"
 	"github.com/brnv/heaverd-ng/tracker"
 	"github.com/op/go-logging"
+
+	"bufio"
+	"io"
+	"math/rand"
+	"net"
+	"net/http"
+	"strings"
 )
 
 type (

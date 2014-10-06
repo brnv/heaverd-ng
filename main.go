@@ -1,16 +1,17 @@
 package main
 
 import (
-	"bufio"
+	"docopt/docopt-go"
+	"os"
+
 	"github.com/brnv/heaverd-ng/tracker"
 	"github.com/brnv/heaverd-ng/webapi"
-	"os"
-	"sync"
-	"time"
-
-	"github.com/docopt/docopt.go"
 	"github.com/op/go-logging"
 	"github.com/zazab/zhash"
+
+	"bufio"
+	"sync"
+	"time"
 )
 
 var (
