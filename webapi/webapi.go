@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"html/template"
 
-	"github.com/brnv/go-web"
 	"github.com/brnv/heaverd-ng/libscore"
 	"github.com/brnv/heaverd-ng/tracker"
+	"github.com/brnv/web"
 	"github.com/op/go-logging"
 
 	"bufio"

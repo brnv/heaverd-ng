@@ -1,11 +1,11 @@
 package main
 
 import (
-	"docopt/docopt-go"
 	"os"
 
 	"github.com/brnv/heaverd-ng/tracker"
 	"github.com/brnv/heaverd-ng/webapi"
+	"github.com/docopt/docopt-go"
 	"github.com/op/go-logging"
 	"github.com/zazab/zhash"
 
