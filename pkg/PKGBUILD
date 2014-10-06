@@ -1,13 +1,14 @@
 # Maintainer: Alexey Baranov <a.baranov@office.ngs.ru>
 
 pkgname=heaverd-ng
-pkgver=63256b
+pkgver=4fc5f5
 pkgrel=1
 pkgdesc="Balancer and restapi frontend for heaver"
 arch=('x86_64')
 url="http://git.rn/projects/OAPP/repos/heaverd-ng/"
 license=('unknown')
 depends=('etcd')
+install='install.sh'
 md5sums=() #generate with 'makepkg -g'
 
 pkgver() {
