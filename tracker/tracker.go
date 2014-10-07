@@ -3,7 +3,6 @@ package tracker
 import (
 	"encoding/json"
 
-	"code.google.com/p/go.crypto/ssh"
 	"github.com/brnv/go-heaver"
 	"github.com/brnv/go-lxc"
 	"github.com/brnv/heaverd-ng/libscore"
@@ -189,7 +188,7 @@ func createContainer(name string) (newContainer lxc.Container, err error) {
 		return newContainer, err
 	}
 
-	newContainer, err = heaver.Create(container.Name, container.Image)
+	newContainer, err = heaver.Create(container.Name, container.Image, container.Key)
 	if err != nil {
 		return newContainer, err
 	}
@@ -199,25 +198,6 @@ func createContainer(name string) (newContainer lxc.Container, err error) {
 	err = hostinfoUpdate()
 	if err != nil {
 		log.Error(err.Error())
-	}
-
-	if container.Key != "" {
-		client, err := ssh.Dial("tcp", newContainer.Ip+":22", &ssh.ClientConfig{
-			User: containerLogin,
-			Auth: []ssh.AuthMethod{
-				ssh.Password(containerPassword),
-			},
-		})
-		if err != nil {
-			return newContainer, err
-		}
-		session, err := client.NewSession()
-		if err != nil {
-			return newContainer, err
-		}
-
-		session.Run("echo '" + container.Key + "'>> /root/.ssh/authorized_keys")
-		session.Close()
 	}
 
 	return newContainer, nil
