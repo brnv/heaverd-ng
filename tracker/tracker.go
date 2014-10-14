@@ -158,6 +158,10 @@ func messageListening(listener net.Listener) {
 				if err != nil {
 					messageSocket.Write([]byte("Error:" + err.Error()))
 				} else {
+					if Control.Action == "destroy" {
+						_, _ = etcdc.Delete(
+							"containers/"+Control.ContainerName, false)
+					}
 					messageSocket.Write([]byte("ok"))
 				}
 			default:
