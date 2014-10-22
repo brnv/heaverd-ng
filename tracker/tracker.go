@@ -123,7 +123,7 @@ func messageListening(listener net.Listener) {
 			defer messageSocket.Close()
 			err = json.NewDecoder(messageSocket).Decode(&message)
 			if err != nil {
-				log.Error("[error]", err)
+				log.Error(err.Error())
 			}
 			switch message.Type {
 			case "container-create":
@@ -131,14 +131,14 @@ func messageListening(listener net.Listener) {
 
 				err := json.Unmarshal(message.Body, &containerName)
 				if err != nil {
-					log.Error("[error]", err)
+					log.Error(err.Error())
 					messageSocket.Write([]byte("Error:" + err.Error()))
 					return
 				}
 
 				newContainer, err := createContainer(containerName)
 				if err != nil {
-					log.Error("[error]", err)
+					log.Error(err.Error())
 					messageSocket.Write([]byte("Error:" + err.Error()))
 					return
 				}
@@ -152,7 +152,7 @@ func messageListening(listener net.Listener) {
 				}
 				err := json.Unmarshal(message.Body, &Control)
 				if err != nil {
-					log.Error("[error]", err)
+					log.Error(err.Error())
 				}
 				err = heaver.Control(Control.ContainerName, Control.Action)
 				if err != nil {
@@ -185,7 +185,7 @@ func createContainer(name string) (newContainer lxc.Container, err error) {
 			intentContainerStatus)
 	}
 
-	log.Notice("creating container", name, "on host", Hostinfo.Hostname)
+	log.Notice("creating container %s on host %s", name, Hostinfo.Hostname)
 
 	_, err = etcdc.Delete("containers/"+name, false)
 	if err != nil {

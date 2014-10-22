@@ -52,11 +52,15 @@ func DiskWeight(diskFree int, diskCapacity int, profile Profile) float64 {
 
 func RamWeight(ramFree int, ramCapacity int,
 	zfsArcMax int, zfsArcCurrent int, profile Profile) float64 {
-	realFree := ramFree - (zfsArcMax - zfsArcCurrent)
+	// 22.10.2014 remove zfs arc from calculation
+	//realFree := ramFree - (zfsArcMax - zfsArcCurrent)
+	realFree := ramFree
 	if realFree < 0 {
 		return 0
 	}
-	realCapacity := ramCapacity - zfsArcMax
+	// 22.10.2014 remove zfs arc from calculation
+	//realCapacity := ramCapacity - zfsArcMax
+	realCapacity := ramCapacity
 	return minNorm(realFree, realCapacity-profile.ReservedRAM)
 }
 

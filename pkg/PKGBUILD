@@ -1,14 +1,15 @@
 # Maintainer: Alexey Baranov <a.baranov@office.ngs.ru>
 
 pkgname=heaverd-ng
-pkgver=90c584
+pkgver=768be3
 pkgrel=1
 pkgdesc="Balancer and restapi frontend for heaver"
 arch=('x86_64')
-url="http://git.rn/projects/OAPP/repos/heaverd-ng/"
+url="http://git.rn/projects/DEVOPS/repos/heaverd-ng/"
 license=('unknown')
 depends=('etcd')
 install='install.sh'
+backup=('etc/heaverd-ng/heaverd-ng.conf.toml')
 md5sums=() #generate with 'makepkg -g'
 
 pkgver() {
@@ -24,7 +25,7 @@ prepare() {
 }
 
 build() {
-	sudo -ua.baranov git clone ssh://git@git.rn:7999/oapp/heaverd-ng.git $srcdir
+	sudo -ua.baranov git clone ssh://git@git.rn/devops/heaverd-ng.git $srcdir
 	ln -s $srcdir $GOPATH/src/heaverd-ng
 	cd $srcdir
 	git checkout dev
