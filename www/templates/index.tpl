@@ -5,8 +5,8 @@
 
 	<div id="charts"></div>
 
-	<script src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
-	<script src="http://code.highcharts.com/highcharts.js"></script>
+	<script src="/static/js/jquery-2.1.1.min.js"></script>
+	<script src="/static/js/highcharts.js"></script>
 	<script type="text/javascript" charset="utf-8">
 		var fetchData = function() {
 			$.ajax({
