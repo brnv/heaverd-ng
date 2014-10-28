@@ -17,7 +17,7 @@
 			});
 			setTimeout(function() {
 				fetchData()
-			}, 5000);
+			}, 3000);
 		}
 
 		fetchData();

@@ -216,14 +216,14 @@ func hostinfoUpdate() error {
 	}
 
 	host, _ := json.Marshal(Hostinfo)
-	_, err = etcdc.Set("hosts/"+Hostinfo.Hostname, string(host), 5)
+	_, err = etcdc.Set("hosts/"+Hostinfo.Hostname, string(host), 10)
 	if err != nil {
 		return err
 	}
 
 	for _, c := range Hostinfo.Containers {
 		container, _ := json.Marshal(c)
-		_, err = etcdc.Set("containers/"+c.Name, string(container), 5)
+		_, err = etcdc.Set("containers/"+c.Name, string(container), 10)
 		if err != nil {
 			return err
 		}
