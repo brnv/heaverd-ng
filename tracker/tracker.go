@@ -165,7 +165,7 @@ func messageListening(listener net.Listener) {
 					messageSocket.Write([]byte("ok"))
 				}
 			default:
-				log.Notice("unknown message")
+				log.Notice("unknown message %s", message)
 			}
 		}()
 	}
@@ -181,11 +181,11 @@ func createContainer(name string) (newContainer lxc.Container, err error) {
 	}
 
 	if container.Status != intentContainerStatus {
-		return newContainer, errors.New("Container is " + container.Status + ", not " +
-			intentContainerStatus)
+		return newContainer, errors.New("Container is " +
+			container.Status + ", not " + intentContainerStatus)
 	}
 
-	log.Notice("creating container %s on host %s", name, Hostinfo.Hostname)
+	log.Notice("creating container %s on host %s ...", name, Hostinfo.Hostname)
 
 	_, err = etcdc.Delete("containers/"+name, false)
 	if err != nil {
@@ -203,6 +203,8 @@ func createContainer(name string) (newContainer lxc.Container, err error) {
 	if err != nil {
 		log.Error(err.Error())
 	}
+
+	log.Notice("... done")
 
 	return newContainer, nil
 }

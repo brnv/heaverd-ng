@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"html/template"
 
+	"github.com/brnv/go-lxc"
 	"github.com/brnv/heaverd-ng/libscore"
 	"github.com/brnv/heaverd-ng/tracker"
 	"github.com/brnv/web"
@@ -20,9 +21,10 @@ import (
 type (
 	Context   struct{}
 	ApiAnswer struct {
-		Status string `json:"status"`
-		Msg    string `json:"msg"`
-		Error  string `json:"error"`
+		From   string      `json:"from"`
+		Status string      `json:"status"`
+		Msg    interface{} `json:"msg"`
+		Error  string      `json:"error"`
 	}
 )
 
@@ -143,7 +145,10 @@ func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 		return
 	}
 
-	apiAnswer(w, "ok", hostAnswer, "", http.StatusCreated)
+	newContainer := lxc.Container{}
+	json.Unmarshal([]byte(hostAnswer), &newContainer)
+
+	apiAnswer(w, "ok", newContainer, "", http.StatusCreated)
 }
 
 func handleContainerStart(w web.ResponseWriter, r *web.Request) {
@@ -212,10 +217,11 @@ func apiAnswerError(w web.ResponseWriter, answer string) {
 }
 
 func apiAnswer(w web.ResponseWriter, status string,
-	msg string, err string, code int) {
+	msg interface{}, err string, code int) {
 
 	w.Header().Set("Content-Type", "application/json")
 	answer, _ := json.Marshal(ApiAnswer{
+		From:   tracker.Hostinfo.Hostname,
 		Status: status,
 		Msg:    msg,
 		Error:  err,
