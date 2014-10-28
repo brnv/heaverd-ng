@@ -41,6 +41,7 @@ package() {
 	cp $srcdir/main $pkgdir/usr/bin/heaverd-ng
 	cp $srcdir/pkg/config/heaverd-ng.conf.toml $pkgdir/etc/heaverd-ng/
 	cp -r $srcdir/www/templates $pkgdir/usr/share/heaverd-ng/
+	cp -r $srcdir/www/static $pkgdir/usr/share/heaverd-ng/
 
 	cp $srcdir/pkg/systemd/heaverd-ng.service $pkgdir/usr/lib/systemd/system/
 }

@@ -3,7 +3,7 @@ port = "1444"
 pools = ["default"]
 [web]
 port = "8081"
-[templates]
-dir = "/usr/share/heaverd-ng/templates/"
+[static]
+dir = "/usr/share/heaverd-ng/"
 [etcd]
 port = "4041"

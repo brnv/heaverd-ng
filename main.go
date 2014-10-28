@@ -49,7 +49,7 @@ func main() {
 	}
 
 	webPort, _ := config.GetString("web", "port")
-	templatesDir, _ := config.GetString("templates", "dir")
+	staticDir, _ := config.GetString("static", "dir")
 	clusterPort, _ := config.GetString("cluster", "port")
 	clusterPools, _ := config.GetStringSlice("cluster", "pools")
 	etcdPort, _ := config.GetString("etcd", "port")
@@ -58,10 +58,10 @@ func main() {
 	wg.Add(2)
 	go func() {
 		webapi.Run(map[string]interface{}{
-			"webPort":      webPort,
-			"templatesDir": templatesDir,
-			"clusterPort":  clusterPort,
-			"seed":         time.Now().UnixNano(),
+			"webPort":     webPort,
+			"staticDir":   staticDir,
+			"clusterPort": clusterPort,
+			"seed":        time.Now().UnixNano(),
 		})
 		wg.Done()
 	}()

@@ -34,22 +34,22 @@ const (
 )
 
 var (
-	rootRouter   = web.New(Context{})
-	apiRouter    = rootRouter.Subrouter(Context{}, "/"+apiVersion)
-	webPort      string
-	templatesDir string
-	clusterPort  string
-	log          = logging.MustGetLogger("heaverd-ng")
+	rootRouter  = web.New(Context{})
+	apiRouter   = rootRouter.Subrouter(Context{}, "/"+apiVersion)
+	webPort     string
+	staticDir   string
+	clusterPort string
+	log         = logging.MustGetLogger("heaverd-ng")
 )
 
 func Run(params map[string]interface{}) {
 	webPort = params["webPort"].(string)
-	templatesDir = params["templatesDir"].(string)
+	staticDir = params["staticDir"].(string)
 	clusterPort = params["clusterPort"].(string)
 	rand.Seed(params["seed"].(int64))
 
 	rootRouter.
-		Middleware(web.StaticMiddleware("www")).
+		Middleware(web.StaticMiddleware(staticDir)).
 		Get("/score", handleScore, "Cluster graphs")
 
 	apiRouter.
@@ -80,7 +80,7 @@ func Run(params map[string]interface{}) {
 func handleScore(w web.ResponseWriter, r *web.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	template.Must(template.
-		ParseFiles(templatesDir+"/index.tpl")).Execute(w, nil)
+		ParseFiles(staticDir+"templates/index.tpl")).Execute(w, nil)
 }
 
 func handleHelp(w web.ResponseWriter, r *web.Request) {
