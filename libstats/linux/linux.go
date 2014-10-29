@@ -21,11 +21,16 @@ type CPUMeasure struct {
 	err   chan error
 }
 
+const CpuUsageTimeRangeSec = 300
+
 func startCpuMeasure() CPUMeasure {
 	ch := CPUMeasure{}
 	ch.usage = make(chan int)
 	ch.err = make(chan error)
+
 	go func() {
+		usageAcc := make([]int, CpuUsageTimeRangeSec)
+		index := 0
 		for {
 			ticksBeforeSleep, err := lxc.GetCpuTicks()
 			if err != nil {
@@ -38,10 +43,20 @@ func startCpuMeasure() CPUMeasure {
 				ch.err <- err
 				continue
 			}
-			usage := ticksAfterSleep - ticksBeforeSleep
-			ch.usage <- usage
+			usageAcc[index] = ticksAfterSleep - ticksBeforeSleep
+			usageAvg := 0
+			for _, usage := range usageAcc {
+				usageAvg += usage
+			}
+			ch.usage <- int(usageAvg / CpuUsageTimeRangeSec)
+			if index == CpuUsageTimeRangeSec-1 {
+				index = 0
+			} else {
+				index++
+			}
 		}
 	}()
+
 	return ch
 }
 
@@ -84,7 +99,7 @@ func Cpu() (capacity int, usage int, err error) {
 	case err = <-cpuMeasure.err:
 	default:
 	}
-	return capacity, usage, nil
+	return capacity, usage, err
 }
 
 func Disk() (capacity int, free int, err error) {

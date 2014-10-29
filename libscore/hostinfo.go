@@ -51,7 +51,6 @@ func (host *Hostinfo) Refresh() error {
 	if err != nil {
 		return err
 	}
-	cpuUsage = (cpuUsage + host.CpuUsage) / 2
 	diskCapacity, diskFree, err := linux.Disk()
 	if err != nil {
 		return err
