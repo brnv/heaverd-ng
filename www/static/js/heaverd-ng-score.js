@@ -18,9 +18,19 @@ var heaverd = {
 		}, 3000);
 	},
 
-	_render: function(hosts) {
-		pools = {};
+	_getTotalScore: function(hosts) {
+		totalScore = 0;
+		$.each(hosts, function(key, host) {
+			if (host.Score <= heaverd._scoreThreshold) {
+				host.Score = heaverd._scoreThreshold;
+			}
+			totalScore += host.Score;
+		});
+		return totalScore;
+	},
 
+	_getPools: function (hosts) {
+		pools = {};
 		$.each(hosts, function(hostname, info) {
 			$.each(info.Pools, function(key, poolname) {
 				if (!pools[poolname]) {
@@ -29,29 +39,29 @@ var heaverd = {
 				pools[poolname].push(info);
 			});
 		});
+		return pools;
+	},
 
-		colorIndex = 0;
-
-		$.each(pools, function(poolname, hosts) {
+	_render: function(hosts) {
+		$.each(heaverd._getPools(hosts), function(poolname, hosts) {
 			poolsData = [];
 			weightsData = [];
 
-			totalScore = 0;
-			$.each(hosts, function(key, host) {
-				if (host.Score == 0) {
-					return;
-				}
-				totalScore += host.Score;
-			});
+			totalScore = heaverd._getTotalScore(hosts);
 
 			$.each(hosts, function(key, host) {
-				if (host.Score == 0) {
-					return;
+				color = heaverd._colors.ok;
+				if (host.Score <= heaverd._scoreThreshold) {
+					host.Score = heaverd._scoreThreshold;
+					color = heaverd._colors.warning;
 				}
-				poolsData.push({name: host.Hostname + " (" +
-					Object.keys(host.Containers).length+")",
-					y: host.Score/totalScore*100,
-					color:heaverd._colors[colorIndex],});
+
+				poolsData.push(
+						{name: host.Hostname + " (" +
+							Object.keys(host.Containers).length+")",
+							y: host.Score/totalScore *100,
+							color:color,
+						});
 
 				weights = {
 					"cpu": [host.CpuWeight, "CPU " +
@@ -67,21 +77,33 @@ var heaverd = {
 						function(param, value) {
 							wl = Object.keys(weights).length
 								brightness = 1/wl-(j/wl)/wl;
+							color = Highcharts.Color(heaverd._colors.ok).
+								brighten(brightness).get();
+							name = value[1];
+							if (value[0] <= heaverd._scoreThreshold) {
+								value[0] = 0.5; //to see small sector in drawn chart
+								color = heaverd._colors.warning;
+								name = '<span class="warning">' + value[1] + '</span>';
+							}
+							//this assignments is for seeing small sector in drawn chart
+							if (host.CpuWeight == 0) {
+								host.CpuWeight = 0.5; 
+							}
+							if (host.RamWeight == 0) {
+								host.RamWeight = 0.5;
+							}
+							if (host.DiskWeight == 0) {
+								host.DiskWeight = 0.5;
+							}
 							weightsData.push({
-								name: value[1],
+								name: name,
 								y: host.Score/totalScore*100/(host.CpuWeight+
 										host.RamWeight+
 										host.DiskWeight)*value[0],
-								color: Highcharts.Color(
-										heaverd._colors[colorIndex]).
-									brighten(brightness).get()
+								color: color,
 							});
 							j += 1;
 						});
-				colorIndex += 1;
-				if (colorIndex == heaverd._colors.length) {
-					colorIndex = 0;
-				}
 			});
 
 			if ($('div#chart-'+poolname).length == 0) {
@@ -103,14 +125,17 @@ var heaverd = {
 						size: '85%',
 						dataLabels: {
 							color: 'white',
-							distance: -50
+							distance: -50,
 						}
 					}, {
 						animation: false,
 						data: poolsData,
 						data: weightsData,
 						size: '100%',
-						innerSize: '85%'
+						innerSize: '85%',
+						dataLabels: {
+							useHTML: true,
+						}
 					}]
 				});
 			} else {
@@ -121,11 +146,13 @@ var heaverd = {
 		});
 	},
 
-	_colors: [
-		"#457B34"
-	],
+	_colors: {
+		ok: "#457B34",
+		warning: "red",
+	},
 
 	_charts: {},
-
 	_selector: "#charts",
+	_scoreThreshold: 0.05,
+	_resourceThreshold: 0.4,
 }
