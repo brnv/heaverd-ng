@@ -154,5 +154,4 @@ var heaverd = {
 	_charts: {},
 	_selector: "#charts",
 	_scoreThreshold: 0.05,
-	_resourceThreshold: 0.4,
 }

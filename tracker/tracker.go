@@ -52,6 +52,19 @@ func Run(params map[string]interface{}) {
 	_, err = etcdc.CreateDir("containers/", 0)
 	log.Info("etcd port: %s", etcdPort)
 
+	err = Hostinfo.Refresh()
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	for _, c := range Hostinfo.Containers {
+		container, _ := json.Marshal(c)
+		_, err = etcdc.Create("containers/"+c.Name, string(container), 1)
+		if err != nil {
+			log.Fatal(err.Error())
+		}
+	}
+
 	for {
 		err = hostinfoUpdate()
 		if err != nil {
