@@ -12,6 +12,7 @@ type Profile struct {
 	SlowOpThreshold      int
 	LagReactionSpeed     int
 	UptimeFactor         int
+	IostatAwaitThreshold float64
 }
 
 var DefaultProfile = Profile{
@@ -21,6 +22,7 @@ var DefaultProfile = Profile{
 	SlowOpThreshold:      300,
 	LagReactionSpeed:     120,
 	UptimeFactor:         130,
+	IostatAwaitThreshold: 8.0,
 }
 
 type Segment struct {
@@ -36,7 +38,8 @@ func GetScore(host Hostinfo, profile Profile) float64 {
 	speedFactor := 1 - 2*math.Atan(math.Max(0, float64(host.ControlOpTime-
 		profile.SlowOpThreshold))/float64(profile.LagReactionSpeed))
 
-	score := host.CpuWeight * host.DiskWeight * host.RamWeight * speedFactor * uptimeFactor
+	score := host.CpuWeight * host.DiskWeight *
+		host.RamWeight * speedFactor * uptimeFactor * host.DiskIOWeight
 
 	return score
 }
@@ -62,6 +65,14 @@ func RamWeight(ramFree int, ramCapacity int,
 	//realCapacity := ramCapacity - zfsArcMax
 	realCapacity := ramCapacity
 	return minNorm(realFree, realCapacity-profile.ReservedRAM)
+}
+
+func DiskIOWeight(ioStatAwait float64, profile Profile) float64 {
+	weight := 1.0 - ioStatAwait/profile.IostatAwaitThreshold
+	if weight < 0 {
+		weight = 0.0
+	}
+	return weight
 }
 
 func minNorm(a, b int) float64 {

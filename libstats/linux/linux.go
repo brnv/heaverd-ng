@@ -1,12 +1,14 @@
 package linux
 
 import (
+	"io/ioutil"
 	"os/exec"
 
 	"github.com/brnv/go-lxc"
 
 	"net"
 	"os"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -21,44 +23,15 @@ type CPUMeasure struct {
 	err   chan error
 }
 
-const CpuUsageTimeRangeSec = 300
+var iostatAwait = startIostatAwaitMeasure()
 
-func startCpuMeasure() CPUMeasure {
-	ch := CPUMeasure{}
-	ch.usage = make(chan int)
-	ch.err = make(chan error)
-
-	go func() {
-		usageAcc := make([]int, CpuUsageTimeRangeSec)
-		index := 0
-		for {
-			ticksBeforeSleep, err := lxc.GetCpuTicks()
-			if err != nil {
-				ch.err <- err
-				continue
-			}
-			time.Sleep(time.Second)
-			ticksAfterSleep, err := lxc.GetCpuTicks()
-			if err != nil {
-				ch.err <- err
-				continue
-			}
-			usageAcc[index] = ticksAfterSleep - ticksBeforeSleep
-			usageAvg := 0
-			for _, usage := range usageAcc {
-				usageAvg += usage
-			}
-			ch.usage <- int(usageAvg / CpuUsageTimeRangeSec)
-			if index == CpuUsageTimeRangeSec-1 {
-				index = 0
-			} else {
-				index++
-			}
-		}
-	}()
-
-	return ch
+type IostatAwaitMeasure struct {
+	value chan float64
+	err   chan error
 }
+
+const CpuUsageTimeRangeSec = 300
+const IoAwaitTimeRangeSec = 300
 
 func Memory() (capacity int, free int, err error) {
 	cmd := exec.Command("grep", "MemTotal", "/proc/meminfo")
@@ -149,4 +122,147 @@ func NetAddr() (netaddr []string, err error) {
 		return []string{}, err
 	}
 	return netaddr, nil
+}
+
+func GetIostatAwait() (value float64, err error) {
+	select {
+	case value = <-iostatAwait.value:
+	case err = <-iostatAwait.err:
+	default:
+	}
+	return value, err
+}
+
+func startCpuMeasure() CPUMeasure {
+	ch := CPUMeasure{}
+	ch.usage = make(chan int)
+	ch.err = make(chan error)
+
+	go func() {
+		usageAcc := make([]int, CpuUsageTimeRangeSec)
+		index := 0
+		for {
+			ticksBeforeSleep, err := lxc.GetCpuTicks()
+			if err != nil {
+				ch.err <- err
+				continue
+			}
+			time.Sleep(time.Second)
+			ticksAfterSleep, err := lxc.GetCpuTicks()
+			if err != nil {
+				ch.err <- err
+				continue
+			}
+			usageAcc[index] = ticksAfterSleep - ticksBeforeSleep
+			usageSum := 0
+			for _, usage := range usageAcc {
+				usageSum += usage
+			}
+			ch.usage <- int(usageSum / CpuUsageTimeRangeSec)
+			if index == CpuUsageTimeRangeSec-1 {
+				index = 0
+			} else {
+				index++
+			}
+		}
+	}()
+
+	return ch
+}
+
+func startIostatAwaitMeasure() IostatAwaitMeasure {
+	ch := IostatAwaitMeasure{}
+	ch.value = make(chan float64)
+	ch.err = make(chan error)
+
+	go func() {
+		ioawaitAcc := make([]float64, IoAwaitTimeRangeSec)
+		index := 0
+		for {
+			pDiskStats, err := getDiskStats()
+			if err != nil {
+				ch.err <- err
+				continue
+			}
+			pNrIos := getNrIos(pDiskStats)
+			pRdTicks := getRdTicks(pDiskStats)
+			pWrTicks := getWrTicks(pDiskStats)
+			time.Sleep(time.Second)
+			cDiskStats, err := getDiskStats()
+			if err != nil {
+				ch.err <- err
+				continue
+			}
+			cNrIos := getNrIos(cDiskStats)
+			cRdTicks := getRdTicks(cDiskStats)
+			cWrTicks := getWrTicks(cDiskStats)
+
+			if cNrIos-pNrIos == 0 {
+				ioawaitAcc[index] = 0.0
+			} else {
+				ioawaitAcc[index] = float64(cRdTicks-pRdTicks+cWrTicks-pWrTicks) /
+					float64(cNrIos-pNrIos)
+			}
+
+			ioawaitSum := 0.0
+			for _, ioawait := range ioawaitAcc {
+				ioawaitSum += ioawait
+			}
+			ch.value <- ioawaitSum / IoAwaitTimeRangeSec
+			if index == IoAwaitTimeRangeSec-1 {
+				index = 0
+			} else {
+				index++
+			}
+		}
+	}()
+	return ch
+}
+
+func getWrTicks(stats [][]string) int {
+	wrTicks := 0
+	for _, stat := range stats {
+		statTicks, _ := strconv.Atoi(stat[10])
+		wrTicks += statTicks
+	}
+	return wrTicks
+}
+
+func getRdTicks(deviceStats [][]string) int {
+	rdTicks := 0
+	for _, stat := range deviceStats {
+		statTicks, _ := strconv.Atoi(stat[6])
+		rdTicks += statTicks
+	}
+	return rdTicks
+}
+
+func getNrIos(stats [][]string) int {
+	nrIos := 0
+	for _, stat := range stats {
+		statRdIos, _ := strconv.Atoi(stat[3])
+		statWrIos, _ := strconv.Atoi(stat[7])
+		nrIos += statRdIos + statWrIos
+	}
+	return nrIos
+}
+
+func getDiskStats() ([][]string, error) {
+	result := make([][]string, 0)
+	diskstats, err := ioutil.ReadFile("/proc/diskstats")
+	if err != nil {
+		return result, err
+	}
+	devicesIoStats := strings.Split(string(diskstats), "\n")
+	for _, deviceStats := range devicesIoStats {
+		statsArrayed := strings.Fields(string(deviceStats))
+		if len(statsArrayed) == 0 {
+			continue
+		}
+		if ok, _ := regexp.MatchString(`^sd\D+$`, statsArrayed[2]); !ok {
+			continue
+		}
+		result = append(result, statsArrayed)
+	}
+	return result, nil
 }

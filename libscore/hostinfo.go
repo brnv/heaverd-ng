@@ -20,11 +20,13 @@ type Hostinfo struct {
 	ZfsArcMax     int
 	ZfsArcCurrent int
 	ControlOpTime int
+	IostatAwait   float64
 	Uptime        int64
 	NetAddr       []string
 	CpuWeight     float64
 	DiskWeight    float64
 	RamWeight     float64
+	DiskIOWeight  float64
 	Score         float64
 	Pools         []string
 	Containers    map[string]lxc.Container
@@ -71,6 +73,11 @@ func (host *Hostinfo) Refresh() error {
 		return err
 	}
 
+	iostatAwait, err := linux.GetIostatAwait()
+	if err != nil {
+		return err
+	}
+
 	*host = Hostinfo{
 		Hostname:      hostname,
 		CpuUsage:      cpuUsage,
@@ -82,11 +89,13 @@ func (host *Hostinfo) Refresh() error {
 		ZfsArcMax:     zfsArcMax,
 		ZfsArcCurrent: zfsArcCurrent,
 		ControlOpTime: controlOpTime,
+		IostatAwait:   iostatAwait,
 		Uptime:        uptime,
 		NetAddr:       netAddr,
 		CpuWeight:     CpuWeight(cpuUsage, cpuCapacity, DefaultProfile),
 		DiskWeight:    DiskWeight(diskFree, diskCapacity, DefaultProfile),
 		RamWeight:     RamWeight(ramFree, ramCapacity, zfsArcMax, zfsArcCurrent, DefaultProfile),
+		DiskIOWeight:  DiskIOWeight(iostatAwait, DefaultProfile),
 		Containers:    containers,
 		Pools:         host.Pools,
 	}
