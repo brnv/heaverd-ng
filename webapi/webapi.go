@@ -120,7 +120,7 @@ func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 	targetHost, err := getPreferedHost(containerName, poolName)
 	if err != nil {
 		log.Error(err.Error())
-		apiAnswer(w, "error", "", err.Error(), http.StatusNotFound)
+		apiAnswer(w, "error", nil, err.Error(), http.StatusNotFound)
 		return
 	}
 
@@ -131,7 +131,7 @@ func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 	err = tracker.CreateIntent(intent)
 	if err != nil {
 		if strings.Contains(err.Error(), etcdErrCodeKeyExists) {
-			apiAnswer(w, "error", "", "Not unique name", http.StatusConflict)
+			apiAnswer(w, "error", nil, "Not unique name", http.StatusConflict)
 		}
 		return
 	}
@@ -141,7 +141,7 @@ func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 	hostAnswer, _ := sendTcpMessage(targetHost, clusterPort, createMessage)
 
 	if strings.Contains(hostAnswer, "Error") {
-		apiAnswer(w, "error", "", hostAnswer, http.StatusNotFound)
+		apiAnswer(w, "error", nil, hostAnswer, http.StatusNotFound)
 		return
 	}
 
@@ -172,18 +172,18 @@ func controlContainer(action string, w web.ResponseWriter, r *web.Request) {
 	} else {
 		hostname = getHostnameByContainer(containerName)
 		if hostname == "" {
-			apiAnswer(w, "error", "", "unknown container", http.StatusNotFound)
+			apiAnswer(w, "error", nil, "Unknown container", http.StatusNotFound)
 			return
 		}
 	}
 
 	if !isHostExists(hostname) {
-		apiAnswer(w, "error", "", "unknown host", http.StatusNotFound)
+		apiAnswer(w, "error", nil, "Unknown host", http.StatusNotFound)
 		return
 	}
 
 	if !isContainerExists(hostname, containerName) {
-		apiAnswer(w, "error", "", "unknown container", http.StatusNotFound)
+		apiAnswer(w, "error", nil, "Unknown container", http.StatusNotFound)
 		return
 	}
 
@@ -205,15 +205,13 @@ func controlContainer(action string, w web.ResponseWriter, r *web.Request) {
 }
 
 func apiAnswerOk(w web.ResponseWriter) {
-	msg := ""
 	err := ""
-	apiAnswer(w, "ok", msg, err, http.StatusNoContent)
+	apiAnswer(w, "ok", nil, err, http.StatusNoContent)
 }
 
 func apiAnswerError(w web.ResponseWriter, answer string) {
-	msg := ""
 	err := answer
-	apiAnswer(w, "error", msg, err, http.StatusConflict)
+	apiAnswer(w, "error", nil, err, http.StatusConflict)
 }
 
 func apiAnswer(w web.ResponseWriter, status string,
