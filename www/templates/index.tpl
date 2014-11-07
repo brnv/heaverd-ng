@@ -11,8 +11,8 @@ span.warning {
 	font-weight: bold;
 	color: white;
 	padding: 3px;
-	background-color: red;
-}
+	background-color: #D00000;
+ }
 </style>
 </head>
 <body >
