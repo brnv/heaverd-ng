@@ -30,8 +30,11 @@ type IostatAwaitMeasure struct {
 	err   chan error
 }
 
-const CpuUsageTimeRangeSec = 300
-const IoAwaitTimeRangeSec = 300
+const (
+	CpuUsageTimeRangeSec = 300
+	SecondsInFiveMinutes = 300
+	FiveMinutesInDay     = 288
+)
 
 func Memory() (capacity int, free int, err error) {
 	cmd := exec.Command("grep", "MemTotal", "/proc/meminfo")
@@ -176,14 +179,18 @@ func startIostatAwaitMeasure() IostatAwaitMeasure {
 	ch.err = make(chan error)
 
 	go func() {
-		ioawaitAcc := make([]float64, IoAwaitTimeRangeSec)
-		index := 0
+		ioawaitAccFiveMinutes := []float64{}
+		ioawaitAccDay := []float64{}
+		indexSeconds := 0
+		indexFiveMinutes := 0
+
 		for {
 			pDiskStats, err := getDiskStats()
 			if err != nil {
 				ch.err <- err
 				continue
 			}
+
 			pNrIos := getNrIos(pDiskStats)
 			pRdTicks := getRdTicks(pDiskStats)
 			pWrTicks := getWrTicks(pDiskStats)
@@ -197,25 +204,49 @@ func startIostatAwaitMeasure() IostatAwaitMeasure {
 			cRdTicks := getRdTicks(cDiskStats)
 			cWrTicks := getWrTicks(cDiskStats)
 
+			indexSeconds++
+
 			if cNrIos-pNrIos == 0 {
-				ioawaitAcc[index] = 0.0
+				ioawaitAccFiveMinutes = append(ioawaitAccFiveMinutes, 0.0)
 			} else {
-				ioawaitAcc[index] = float64(cRdTicks-pRdTicks+cWrTicks-pWrTicks) /
-					float64(cNrIos-pNrIos)
+				ioawaitAccFiveMinutes = append(ioawaitAccFiveMinutes,
+					float64(cRdTicks-pRdTicks+cWrTicks-pWrTicks)/
+						float64(cNrIos-pNrIos))
 			}
 
-			ioawaitSum := 0.0
-			for _, ioawait := range ioawaitAcc {
-				ioawaitSum += ioawait
+			if indexSeconds == SecondsInFiveMinutes {
+				sum := 0.0
+				for _, ioawait := range ioawaitAccFiveMinutes {
+					sum += ioawait
+				}
+				avg := sum / SecondsInFiveMinutes
+				indexFiveMinutes++
+				if len(ioawaitAccDay) < FiveMinutesInDay {
+					ioawaitAccDay = append(ioawaitAccDay, avg)
+				} else {
+					ioawaitAccDay[indexFiveMinutes-1] = avg
+				}
+				indexSeconds = 0
+				ioawaitAccFiveMinutes = nil
 			}
-			ch.value <- ioawaitSum / IoAwaitTimeRangeSec
-			if index == IoAwaitTimeRangeSec-1 {
-				index = 0
-			} else {
-				index++
+
+			if indexFiveMinutes == FiveMinutesInDay {
+				indexFiveMinutes = 0
 			}
+
+			sum := 0.0
+			for _, ioawait := range ioawaitAccDay {
+				sum += ioawait
+			}
+			avg := 0.0
+			if len(ioawaitAccDay) > 0 {
+				avg = sum / float64(len(ioawaitAccDay))
+			}
+
+			ch.value <- avg
 		}
 	}()
+
 	return ch
 }
 
