@@ -30,6 +30,7 @@ type Hostinfo struct {
 	Score         float64
 	Pools         []string
 	Containers    map[string]lxc.Container
+	Images        map[string]heaver.Image
 }
 
 func (host *Hostinfo) Refresh() error {
@@ -68,9 +69,14 @@ func (host *Hostinfo) Refresh() error {
 	// TODO: determine control operation time
 	controlOpTime := 2
 
-	containers, err := heaver.List(hostname)
+	containers, err := heaver.ListContainers(hostname)
 	if err != nil {
 		return err
+	}
+
+	images, err := heaver.ListImages()
+	if err != nil {
+		//do nothing
 	}
 
 	iostatAwait, err := linux.GetIostatAwait()
@@ -98,6 +104,7 @@ func (host *Hostinfo) Refresh() error {
 		DiskIOWeight:  DiskIOWeight(iostatAwait, DefaultProfile),
 		Containers:    containers,
 		Pools:         host.Pools,
+		Images:        images,
 	}
 
 	host.Score = GetScore(*host, DefaultProfile)
