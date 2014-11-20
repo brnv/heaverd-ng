@@ -31,7 +31,6 @@ type IostatAwaitMeasure struct {
 }
 
 const (
-	CpuUsageTimeRangeSec = 300
 	SecondsInFiveMinutes = 300
 	FiveMinutesInDay     = 288
 )
@@ -68,7 +67,7 @@ func Memory() (capacity int, free int, err error) {
 	return capacity, free, nil
 }
 
-func Cpu() (capacity int, usage int, err error) {
+func GetCpu() (capacity int, usage int, err error) {
 	capacity = runtime.NumCPU() * 100
 	select {
 	case usage = <-cpuMeasure.usage:
@@ -142,8 +141,11 @@ func startCpuMeasure() CPUMeasure {
 	ch.err = make(chan error)
 
 	go func() {
-		usageAcc := make([]int, CpuUsageTimeRangeSec)
-		index := 0
+		cpuUsageAccFiveMinutes := []int{}
+		cpuUsageAccDay := []int{}
+		indexSeconds := 0
+		indexFiveMinutes := 0
+
 		for {
 			ticksBeforeSleep, err := lxc.GetCpuTicks()
 			if err != nil {
@@ -156,17 +158,47 @@ func startCpuMeasure() CPUMeasure {
 				ch.err <- err
 				continue
 			}
-			usageAcc[index] = ticksAfterSleep - ticksBeforeSleep
-			usageSum := 0
-			for _, usage := range usageAcc {
-				usageSum += usage
-			}
-			ch.usage <- int(usageSum / CpuUsageTimeRangeSec)
-			if index == CpuUsageTimeRangeSec-1 {
-				index = 0
+
+			indexSeconds++
+
+			if ticksAfterSleep-ticksBeforeSleep < 0 {
+				cpuUsageAccFiveMinutes = append(cpuUsageAccFiveMinutes, 0)
 			} else {
-				index++
+				cpuUsageAccFiveMinutes = append(
+					cpuUsageAccFiveMinutes, ticksAfterSleep-ticksBeforeSleep)
 			}
+
+			if indexSeconds == SecondsInFiveMinutes {
+				sum := 0
+				for _, cpuUsage := range cpuUsageAccFiveMinutes {
+					sum += cpuUsage
+				}
+				avg := sum / SecondsInFiveMinutes
+				indexFiveMinutes++
+				if len(cpuUsageAccDay) < FiveMinutesInDay {
+					cpuUsageAccDay = append(cpuUsageAccDay, avg)
+				} else {
+					cpuUsageAccDay[indexFiveMinutes-1] = avg
+				}
+				indexSeconds = 0
+				cpuUsageAccFiveMinutes = nil
+			}
+
+			if indexFiveMinutes == FiveMinutesInDay {
+				indexFiveMinutes = 0
+			}
+
+			sum := 0
+
+			for _, cpuUsage := range cpuUsageAccDay {
+				sum += cpuUsage
+			}
+			avg := 0
+			if len(cpuUsageAccDay) > 0 {
+				avg = int(sum / len(cpuUsageAccDay))
+			}
+
+			ch.usage <- avg
 		}
 	}()
 

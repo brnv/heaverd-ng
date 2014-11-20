@@ -61,7 +61,7 @@ func Run(params map[string]interface{}) {
 		container, _ := json.Marshal(c)
 		_, err = etcdc.Create("containers/"+c.Name, string(container), 1)
 		if err != nil {
-			log.Fatal(err.Error())
+			log.Notice(err.Error())
 		}
 	}
 

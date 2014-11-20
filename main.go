@@ -18,7 +18,7 @@ var (
 	configPath = "/etc/heaverd-ng/heaverd-ng.conf.toml"
 	log        = logging.MustGetLogger("heaverd-ng")
 	logfile    = os.Stderr
-	format     = "%{time:15:04:05.000000} %{pid} %{level:.8s} %{message}"
+	format     = "%{time:15:04:05.000000} %{pid} %{longfile} %{level:.8s} %{message}"
 	config     = zhash.NewHash()
 )
 

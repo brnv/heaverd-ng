@@ -49,7 +49,7 @@ func (host *Hostinfo) Refresh() error {
 	if err != nil {
 		return err
 	}
-	cpuCapacity, cpuUsage, err := linux.Cpu()
+	cpuCapacity, cpuUsage, err := linux.GetCpu()
 	if err != nil {
 		return err
 	}
