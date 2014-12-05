@@ -239,17 +239,20 @@ func getPreferedHost(containerName string, poolName string) (string, error) {
 
 func sendTcpMessage(host string, port string, message []byte) (string, error) {
 	connection, err := net.Dial("tcp", host+":"+port)
-	defer connection.Close()
 	if err != nil {
 		return "", err
 	}
+	defer connection.Close()
+
 	connection.Write(message)
+
 	answer, err := bufio.NewReader(connection).ReadString('\n')
 	if err != nil {
 		if err != io.EOF {
 			return "", err
 		}
 	}
+
 	return string(answer), nil
 }
 
