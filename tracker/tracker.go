@@ -175,6 +175,13 @@ func messageListening(listener net.Listener) {
 						_, _ = etcdc.Delete(
 							"containers/"+Control.ContainerName, false)
 					}
+
+					err = hostinfoUpdate()
+					if err != nil {
+						messageSocket.Write([]byte("Error:" + err.Error()))
+						return
+					}
+
 					messageSocket.Write([]byte("ok"))
 				}
 			default:
@@ -184,33 +191,35 @@ func messageListening(listener net.Listener) {
 	}
 }
 
-func createContainer(name string) (newContainer lxc.Container, err error) {
-	rawContainer, _ := etcdc.Get("containers/"+name, false, false)
+func createContainer(name string) (lxc.Container, error) {
+	rawContainer, err := etcdc.Get("containers/"+name, false, false)
+	if err != nil {
+		return lxc.Container{}, err
+	}
 
 	container := lxc.Container{}
 	err = json.Unmarshal([]byte(rawContainer.Node.Value), &container)
 	if err != nil {
-		return newContainer, err
+		return lxc.Container{}, err
 	}
 
 	if container.Status != intentContainerStatus {
-		return newContainer, errors.New("Container is " +
+		return lxc.Container{}, errors.New("Container is " +
 			container.Status + ", not " + intentContainerStatus)
 	}
 
-	log.Notice("creating container %s on host %s ...", name, Hostinfo.Hostname)
+	log.Notice("creating container %s on host %s...", name, Hostinfo.Hostname)
 
 	_, err = etcdc.Delete("containers/"+name, false)
 	if err != nil {
-		return newContainer, err
+		return lxc.Container{}, err
 	}
 
-	newContainer, err = heaver.Create(container.Name, container.Image, container.Key)
+	newContainer, err := heaver.Create(container.Name, container.Image, container.Key)
+	newContainer.Host = Hostinfo.Hostname
 	if err != nil {
 		return newContainer, err
 	}
-
-	newContainer.Host = Hostinfo.Hostname
 
 	err = hostinfoUpdate()
 	if err != nil {

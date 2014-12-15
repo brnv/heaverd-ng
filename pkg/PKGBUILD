@@ -1,7 +1,7 @@
 # Maintainer: Alexey Baranov <a.baranov@office.ngs.ru>
 
 pkgname=heaverd-ng
-pkgver=01c030
+pkgver=29dd8f
 pkgrel=1
 pkgdesc="Balancer and restapi frontend for heaver"
 arch=('x86_64')
