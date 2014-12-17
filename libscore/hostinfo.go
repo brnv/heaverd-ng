@@ -2,6 +2,7 @@ package libscore
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/brnv/go-heaver"
 	"github.com/brnv/go-lxc"
@@ -10,27 +11,28 @@ import (
 )
 
 type Hostinfo struct {
-	Hostname      string
-	CpuUsage      int
-	CpuCapacity   int
-	DiskFree      int
-	DiskCapacity  int
-	RamFree       int
-	RamCapacity   int
-	ZfsArcMax     int
-	ZfsArcCurrent int
-	ControlOpTime int
-	IostatAwait   float64
-	Uptime        int64
-	NetAddr       []string
-	CpuWeight     float64
-	DiskWeight    float64
-	RamWeight     float64
-	DiskIOWeight  float64
-	Score         float64
-	Pools         []string
-	Containers    map[string]lxc.Container
-	Images        map[string]heaver.Image
+	LastUpdateTimestamp int64
+	Hostname            string
+	CpuUsage            int
+	CpuCapacity         int
+	DiskFree            int
+	DiskCapacity        int
+	RamFree             int
+	RamCapacity         int
+	ZfsArcMax           int
+	ZfsArcCurrent       int
+	ControlOpTime       int
+	IostatAwait         float64
+	Uptime              int64
+	NetAddr             []string
+	CpuWeight           float64
+	DiskWeight          float64
+	RamWeight           float64
+	DiskIOWeight        float64
+	Score               float64
+	Pools               []string
+	Containers          map[string]lxc.Container
+	Images              map[string]heaver.Image
 }
 
 func (host *Hostinfo) Refresh() error {
@@ -85,26 +87,27 @@ func (host *Hostinfo) Refresh() error {
 	}
 
 	*host = Hostinfo{
-		Hostname:      hostname,
-		CpuUsage:      cpuUsage,
-		CpuCapacity:   cpuCapacity,
-		DiskFree:      diskFree,
-		DiskCapacity:  diskCapacity,
-		RamFree:       ramFree,
-		RamCapacity:   ramCapacity,
-		ZfsArcMax:     zfsArcMax,
-		ZfsArcCurrent: zfsArcCurrent,
-		ControlOpTime: controlOpTime,
-		IostatAwait:   iostatAwait,
-		Uptime:        uptime,
-		NetAddr:       netAddr,
-		CpuWeight:     CpuWeight(cpuUsage, cpuCapacity, DefaultProfile),
-		DiskWeight:    DiskWeight(diskFree, diskCapacity, DefaultProfile),
-		RamWeight:     RamWeight(ramFree, ramCapacity, zfsArcMax, zfsArcCurrent, DefaultProfile),
-		DiskIOWeight:  DiskIOWeight(iostatAwait, DefaultProfile),
-		Containers:    containers,
-		Pools:         host.Pools,
-		Images:        images,
+		LastUpdateTimestamp: time.Now().UnixNano(),
+		Hostname:            hostname,
+		CpuUsage:            cpuUsage,
+		CpuCapacity:         cpuCapacity,
+		DiskFree:            diskFree,
+		DiskCapacity:        diskCapacity,
+		RamFree:             ramFree,
+		RamCapacity:         ramCapacity,
+		ZfsArcMax:           zfsArcMax,
+		ZfsArcCurrent:       zfsArcCurrent,
+		ControlOpTime:       controlOpTime,
+		IostatAwait:         iostatAwait,
+		Uptime:              uptime,
+		NetAddr:             netAddr,
+		CpuWeight:           CpuWeight(cpuUsage, cpuCapacity, DefaultProfile),
+		DiskWeight:          DiskWeight(diskFree, diskCapacity, DefaultProfile),
+		RamWeight:           RamWeight(ramFree, ramCapacity, zfsArcMax, zfsArcCurrent, DefaultProfile),
+		DiskIOWeight:        DiskIOWeight(iostatAwait, DefaultProfile),
+		Containers:          containers,
+		Pools:               host.Pools,
+		Images:              images,
 	}
 
 	host.Score = GetScore(*host, DefaultProfile)

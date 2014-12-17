@@ -67,9 +67,8 @@ func storeContainers(containers map[string]lxc.Container) {
 
 func updateContainers(containers map[string]lxc.Container) error {
 	for _, c := range containers {
-		c.KeyModifiedTimestamp = time.Now().UnixNano()
 		container, _ := json.Marshal(c)
-		_, err := storage.Update("containers/"+c.Name, string(container), storedKeyTtl)
+		_, err := storage.Set("containers/"+c.Name, string(container), storedKeyTtl)
 		if err != nil {
 			return err
 		}
@@ -85,7 +84,7 @@ func CreateIntent(intent Intent) error {
 		Image:  intent.Image,
 		Key:    intent.Key,
 	})
-	_, err := storage.Create("containers/"+intent.ContainerName, string(intentContainer), 5)
+	_, err := storage.Create("containers/"+intent.ContainerName, string(intentContainer), storedKeyTtl)
 	if err != nil {
 		return err
 	}
@@ -176,9 +175,11 @@ func listenForMessages(port string) {
 				if err != nil {
 					log.Error(err.Error())
 				}
+
 				err = heaver.Control(Control.ContainerName, Control.Action)
+				timestamp := time.Now().UnixNano()
 				if err != nil {
-					messageSocket.Write([]byte("Error:" + err.Error()))
+					messageSocket.Write(answer(409, "", err.Error(), timestamp))
 				} else {
 					if Control.Action == "destroy" {
 						_, _ = storage.Delete(
@@ -187,17 +188,34 @@ func listenForMessages(port string) {
 
 					err = hostinfoUpdate()
 					if err != nil {
-						messageSocket.Write([]byte("Error:" + err.Error()))
+						messageSocket.Write(answer(409, "", err.Error(), timestamp))
 						return
 					}
 
-					messageSocket.Write([]byte("ok"))
+					messageSocket.Write(answer(200, "ok", "", timestamp))
 				}
 			default:
 				log.Notice("unknown message %s", message)
 			}
 		}()
 	}
+}
+
+func answer(code int, text string, err string, time int64) []byte {
+	answer, _ := json.Marshal(struct {
+		From       string
+		Msg        string
+		Error      string
+		LastUpdate int64
+		Code       int
+	}{
+		From:       Hostinfo.Hostname,
+		Msg:        text,
+		Error:      err,
+		LastUpdate: time,
+		Code:       code,
+	})
+	return answer
 }
 
 func createContainer(name string) (lxc.Container, error) {
