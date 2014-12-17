@@ -1,4 +1,4 @@
-package webapi
+package main
 
 import (
 	"encoding/json"
@@ -6,9 +6,7 @@ import (
 
 	"github.com/brnv/go-lxc"
 	"github.com/brnv/heaverd-ng/libscore"
-	"github.com/brnv/heaverd-ng/tracker"
 	"github.com/brnv/web"
-	"github.com/op/go-logging"
 
 	"bufio"
 	"io"
@@ -39,10 +37,9 @@ var (
 	webPort     string
 	staticDir   string
 	clusterPort string
-	log         = logging.MustGetLogger("heaverd-ng")
 )
 
-func Run(params map[string]interface{}) {
+func WebapiRun(params map[string]interface{}) {
 	webPort = params["webPort"].(string)
 	staticDir = params["staticDir"].(string)
 	clusterPort = params["clusterPort"].(string)
@@ -73,7 +70,7 @@ func Run(params map[string]interface{}) {
 		Get("/h/:hid", handleHostContainersList, "Containers list on host :hid (tbd)").
 		Head("/c/:cid", handleHostByContainer, "Get host by conatiner name (tbd)")
 
-	log.Info("started at port: %s", webPort)
+	log.Info("web api is on :%s", webPort)
 	log.Fatal(http.ListenAndServe(":"+webPort, rootRouter))
 }
 
@@ -93,21 +90,21 @@ func handleStats(w web.ResponseWriter, r *web.Request) {
 	hostname := r.PathParams["hid"]
 	stats := []byte{}
 	if hostname == "" {
-		stats, _ = json.Marshal(tracker.Hostinfo)
+		stats, _ = json.Marshal(Hostinfo)
 	} else {
-		stats, _ = json.Marshal(tracker.Cluster()[hostname])
+		stats, _ = json.Marshal(Cluster()[hostname])
 	}
 	w.Write(stats)
 }
 
 func handleHostsList(w web.ResponseWriter, r *web.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	cluster, _ := json.Marshal(tracker.Cluster())
+	cluster, _ := json.Marshal(Cluster())
 	w.Write(cluster)
 }
 
 func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
-	intent := tracker.Intent{}
+	intent := Intent{}
 	err := json.NewDecoder(r.Body).Decode(&intent)
 	if err != nil {
 		log.Error(err.Error())
@@ -128,7 +125,7 @@ func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 	intent.PoolName = poolName
 	intent.TargetHost = targetHost
 
-	err = tracker.CreateIntent(intent)
+	err = CreateIntent(intent)
 	if err != nil {
 		if strings.Contains(err.Error(), etcdErrCodeKeyExists) {
 			apiAnswer(w, "error", nil, "Not unique name", http.StatusConflict)
@@ -219,7 +216,7 @@ func apiAnswer(w web.ResponseWriter, status string,
 
 	w.Header().Set("Content-Type", "application/json")
 	answer, _ := json.Marshal(ApiAnswer{
-		From:   tracker.Hostinfo.Hostname,
+		From:   Hostinfo.Hostname,
 		Status: status,
 		Msg:    msg,
 		Error:  err,
@@ -229,7 +226,7 @@ func apiAnswer(w web.ResponseWriter, status string,
 }
 
 func getPreferedHost(containerName string, poolName string) (string, error) {
-	segments := libscore.Segments(tracker.Cluster(poolName))
+	segments := libscore.Segments(Cluster(poolName))
 	host, err := libscore.ChooseHost(containerName, segments)
 	if err != nil {
 		return "", err
@@ -257,21 +254,21 @@ func sendTcpMessage(host string, port string, message []byte) (string, error) {
 }
 
 func isHostExists(name string) bool {
-	if _, ok := tracker.Cluster()[name]; !ok {
+	if _, ok := Cluster()[name]; !ok {
 		return false
 	}
 	return true
 }
 
 func isContainerExists(hostname string, name string) bool {
-	if _, ok := tracker.Cluster()[hostname].Containers[name]; !ok {
+	if _, ok := Cluster()[hostname].Containers[name]; !ok {
 		return false
 	}
 	return true
 }
 
 func getHostnameByContainer(containerName string) string {
-	for hostname, host := range tracker.Cluster() {
+	for hostname, host := range Cluster() {
 		if _, ok := host.Containers[containerName]; ok {
 			return hostname
 		}

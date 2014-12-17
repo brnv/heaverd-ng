@@ -3,8 +3,6 @@ package main
 import (
 	"os"
 
-	"github.com/brnv/heaverd-ng/tracker"
-	"github.com/brnv/heaverd-ng/webapi"
 	"github.com/docopt/docopt-go"
 	"github.com/op/go-logging"
 	"github.com/zazab/zhash"
@@ -57,7 +55,7 @@ func main() {
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 	go func() {
-		webapi.Run(map[string]interface{}{
+		WebapiRun(map[string]interface{}{
 			"webPort":     webPort,
 			"staticDir":   staticDir,
 			"clusterPort": clusterPort,
@@ -66,7 +64,7 @@ func main() {
 		wg.Done()
 	}()
 	go func() {
-		tracker.Run(map[string]interface{}{
+		ClusterRun(map[string]interface{}{
 			"clusterPort":  clusterPort,
 			"clusterPools": clusterPools,
 			"etcdPort":     etcdPort,

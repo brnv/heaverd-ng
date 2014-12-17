@@ -1,4 +1,4 @@
-package tracker
+package main
 
 import (
 	"encoding/json"
@@ -7,7 +7,6 @@ import (
 	"github.com/brnv/go-lxc"
 	"github.com/brnv/heaverd-ng/libscore"
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/op/go-logging"
 
 	"errors"
 	"net"
@@ -15,15 +14,13 @@ import (
 )
 
 var (
-	etcdc                 = &etcd.Client{}
+	storage               = &etcd.Client{}
 	Hostinfo              = &libscore.Hostinfo{}
 	intentContainerStatus = "pending"
-	log                   = logging.MustGetLogger("heaverd-ng")
 	containerLogin        = "root"
 	containerPassword     = "123123"
-	clusterPort           string
 	clusterPools          []string
-	etcdPort              string
+	storedKeyTtl          = uint64(10)
 )
 
 type Intent struct {
@@ -34,45 +31,50 @@ type Intent struct {
 	TargetHost    string
 }
 
-func Run(params map[string]interface{}) {
-	clusterPort = params["clusterPort"].(string)
+func ClusterRun(params map[string]interface{}) {
+	go listenForMessages(params["clusterPort"].(string))
+
 	Hostinfo.Pools = params["clusterPools"].([]string)
-	etcdPort = params["etcdPort"].(string)
 
-	listener, err := net.Listen("tcp", ":"+clusterPort)
+	storage = getEtcdClient(params["etcdPort"].(string))
+
+	err := Hostinfo.Refresh()
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
-	log.Info("started at port: %s", clusterPort)
-	go messageListening(listener)
-
-	etcdc = getEtcdClient()
-	_, err = etcdc.CreateDir("hosts/", 0)
-	_, err = etcdc.CreateDir("containers/", 0)
-	log.Info("etcd port: %s", etcdPort)
-
-	err = Hostinfo.Refresh()
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-
-	for _, c := range Hostinfo.Containers {
-		container, _ := json.Marshal(c)
-		_, err = etcdc.Create("containers/"+c.Name, string(container), 1)
-		if err != nil {
-			log.Notice(err.Error())
-		}
-	}
+	storeContainers(Hostinfo.Containers)
 
 	for {
 		err = hostinfoUpdate()
 		if err != nil {
-			log.Notice(err.Error())
-			etcdc = getEtcdClient()
+			log.Error(err.Error())
+			storage = getEtcdClient(params["etcdPort"].(string))
 		}
 		time.Sleep(time.Second)
 	}
+}
+
+func storeContainers(containers map[string]lxc.Container) {
+	for _, c := range containers {
+		container, _ := json.Marshal(c)
+		_, err := storage.Create("containers/"+c.Name, string(container), storedKeyTtl)
+		if err != nil {
+			log.Warning("%v", err)
+		}
+	}
+}
+
+func updateContainers(containers map[string]lxc.Container) error {
+	for _, c := range containers {
+		c.KeyModifiedTimestamp = time.Now().UnixNano()
+		container, _ := json.Marshal(c)
+		_, err := storage.Update("containers/"+c.Name, string(container), storedKeyTtl)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func CreateIntent(intent Intent) error {
@@ -83,7 +85,7 @@ func CreateIntent(intent Intent) error {
 		Image:  intent.Image,
 		Key:    intent.Key,
 	})
-	_, err := etcdc.Create("containers/"+intent.ContainerName, string(intentContainer), 5)
+	_, err := storage.Create("containers/"+intent.ContainerName, string(intentContainer), 5)
 	if err != nil {
 		return err
 	}
@@ -93,7 +95,7 @@ func CreateIntent(intent Intent) error {
 func Cluster(poolName ...string) map[string]libscore.Hostinfo {
 	result := make(map[string]libscore.Hostinfo)
 
-	hosts, err := etcdc.Get("hosts/", true, true)
+	hosts, err := storage.Get("hosts/", true, true)
 	if err != nil {
 		log.Error(err.Error())
 		return result
@@ -119,7 +121,14 @@ func Cluster(poolName ...string) map[string]libscore.Hostinfo {
 	return result
 }
 
-func messageListening(listener net.Listener) {
+func listenForMessages(port string) {
+	listener, err := net.Listen("tcp", ":"+port)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	log.Info("listening for messages on :%s", port)
+
 	message := struct {
 		Type string
 		Body json.RawMessage
@@ -172,7 +181,7 @@ func messageListening(listener net.Listener) {
 					messageSocket.Write([]byte("Error:" + err.Error()))
 				} else {
 					if Control.Action == "destroy" {
-						_, _ = etcdc.Delete(
+						_, _ = storage.Delete(
 							"containers/"+Control.ContainerName, false)
 					}
 
@@ -192,7 +201,7 @@ func messageListening(listener net.Listener) {
 }
 
 func createContainer(name string) (lxc.Container, error) {
-	rawContainer, err := etcdc.Get("containers/"+name, false, false)
+	rawContainer, err := storage.Get("containers/"+name, false, false)
 	if err != nil {
 		return lxc.Container{}, err
 	}
@@ -210,7 +219,7 @@ func createContainer(name string) (lxc.Container, error) {
 
 	log.Notice("creating container %s on host %s...", name, Hostinfo.Hostname)
 
-	_, err = etcdc.Delete("containers/"+name, false)
+	_, err = storage.Delete("containers/"+name, false)
 	if err != nil {
 		return lxc.Container{}, err
 	}
@@ -238,22 +247,20 @@ func hostinfoUpdate() error {
 	}
 
 	host, _ := json.Marshal(Hostinfo)
-	_, err = etcdc.Set("hosts/"+Hostinfo.Hostname, string(host), 10)
+	_, err = storage.Set("hosts/"+Hostinfo.Hostname, string(host), storedKeyTtl)
 	if err != nil {
 		return err
 	}
 
-	for _, c := range Hostinfo.Containers {
-		container, _ := json.Marshal(c)
-		_, err = etcdc.Set("containers/"+c.Name, string(container), 10)
-		if err != nil {
-			return err
-		}
+	err = updateContainers(Hostinfo.Containers)
+	if err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func getEtcdClient() *etcd.Client {
-	return etcd.NewClient([]string{"http://localhost:" + etcdPort})
+func getEtcdClient(port string) *etcd.Client {
+	log.Info("obtaining etcd client on :%s", port)
+	return etcd.NewClient([]string{"http://localhost:" + port})
 }
