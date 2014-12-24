@@ -51,6 +51,7 @@ func main() {
 	clusterPort, _ := config.GetString("cluster", "port")
 	clusterPools, _ := config.GetStringSlice("cluster", "pools")
 	etcdPort, _ := config.GetString("etcd", "port")
+	etcdKeyTtl, _ := config.GetInt("etcd", "keyttl")
 
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
@@ -68,6 +69,7 @@ func main() {
 			"clusterPort":  clusterPort,
 			"clusterPools": clusterPools,
 			"etcdPort":     etcdPort,
+			"etcdKeyTtl":   etcdKeyTtl,
 		})
 		wg.Done()
 	}()

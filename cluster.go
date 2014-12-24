@@ -20,7 +20,7 @@ var (
 	containerLogin        = "root"
 	containerPassword     = "123123"
 	clusterPools          []string
-	storedKeyTtl          = uint64(10)
+	storedKeyTtl          uint64
 )
 
 type Intent struct {
@@ -37,6 +37,7 @@ func ClusterRun(params map[string]interface{}) {
 	Hostinfo.Pools = params["clusterPools"].([]string)
 
 	storage = getEtcdClient(params["etcdPort"].(string))
+	storedKeyTtl = uint64(params["etcdKeyTtl"].(int64))
 
 	err := Hostinfo.Refresh()
 	if err != nil {
@@ -182,7 +183,7 @@ func listenForMessages(port string) {
 					messageSocket.Write(answer(409, "", err.Error(), timestamp))
 				} else {
 					if Control.Action == "destroy" {
-						_, _ = storage.Delete(
+						storage.Delete(
 							"containers/"+Control.ContainerName, false)
 					}
 

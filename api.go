@@ -148,7 +148,7 @@ func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 	newContainer := lxc.Container{}
 	json.Unmarshal(hostAnswer, &newContainer)
 
-	apiAnswer(w, "ok", targetHost, http.StatusCreated, newContainer, "", nil)
+	apiAnswer(w, "ok", targetHost, http.StatusCreated, newContainer, nil, nil)
 }
 
 func handleContainerStart(w web.ResponseWriter, r *web.Request) {

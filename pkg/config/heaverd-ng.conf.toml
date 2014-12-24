@@ -7,3 +7,4 @@ port = "8081"
 dir = "/usr/share/heaverd-ng/"
 [etcd]
 port = "4041"
+keyttl = 20

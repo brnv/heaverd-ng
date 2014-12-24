@@ -1,7 +1,7 @@
 # Maintainer: Alexey Baranov <a.baranov@office.ngs.ru>
 
 pkgname=heaverd-ng
-pkgver=29dd8f
+pkgver=
 pkgrel=1
 pkgdesc="Balancer and restapi frontend for heaver"
 arch=('x86_64')
@@ -30,7 +30,7 @@ build() {
 	ln -s $srcdir $GOPATH/src/heaverd-ng
 	cd $srcdir
 	git checkout $branch
-	go build main.go
+	go build
 }
 
 package() {
@@ -39,7 +39,7 @@ package() {
 	mkdir -p $pkgdir/etc/heaverd-ng/
 	mkdir -p $pkgdir/usr/lib/systemd/system/
 
-	cp $srcdir/main $pkgdir/usr/bin/heaverd-ng
+	cp $srcdir/heaverd-ng $pkgdir/usr/bin/
 	cp $srcdir/pkg/config/heaverd-ng.conf.toml $pkgdir/etc/heaverd-ng/
 	cp -r $srcdir/www/templates $pkgdir/usr/share/heaverd-ng/
 	cp -r $srcdir/www/static $pkgdir/usr/share/heaverd-ng/
