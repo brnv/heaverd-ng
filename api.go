@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"html/template"
 
-	"github.com/brnv/go-lxc"
+	"github.com/brnv/heaverd-ng/liblxc"
 	"github.com/brnv/heaverd-ng/libscore"
 	"github.com/brnv/web"
 

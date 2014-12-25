@@ -4,7 +4,7 @@ import (
 	"io/ioutil"
 	"os/exec"
 
-	"github.com/brnv/go-lxc"
+	"github.com/brnv/heaverd-ng/liblxc"
 
 	"net"
 	"os"

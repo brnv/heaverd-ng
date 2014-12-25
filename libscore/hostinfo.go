@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/brnv/go-heaver"
-	"github.com/brnv/go-lxc"
+	"github.com/brnv/heaverd-ng/libheaver"
+	"github.com/brnv/heaverd-ng/liblxc"
 	"github.com/brnv/heaverd-ng/libstats/linux"
 	"github.com/brnv/heaverd-ng/libstats/zfs"
 )
