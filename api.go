@@ -100,8 +100,14 @@ func handleStats(w web.ResponseWriter, r *web.Request) {
 
 func handleHostsList(w web.ResponseWriter, r *web.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	cluster, _ := json.Marshal(Cluster())
-	w.Write(cluster)
+
+	cluster := Cluster()
+	if len(cluster) == 0 {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+
+	response, _ := json.Marshal(cluster)
+	w.Write(response)
 }
 
 func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
@@ -219,8 +225,8 @@ func controlContainer(action string, w web.ResponseWriter, r *web.Request) {
 }
 
 func apiAnswer(w web.ResponseWriter, status string, from interface{}, code int,
-	msg interface{}, err interface{}, lastUpdate interface{}) {
-
+	msg interface{}, err interface{}, lastUpdate interface{},
+) {
 	w.Header().Set("Content-Type", "application/json")
 	answer, _ := json.Marshal(ApiAnswer{
 		Status:     status,
