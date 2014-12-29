@@ -24,11 +24,12 @@ var (
 )
 
 type Intent struct {
-	Image         []string `json:"image"`
-	Key           string   `json:"key"`
-	ContainerName string
-	PoolName      string
-	TargetHost    string
+	Image               []string `json:"image"`
+	Key                 string   `json:"key"`
+	ContainerName       string
+	PoolName            string
+	TargetHost          string
+	HostUpdateTimestamp int64
 }
 
 func ClusterRun(params map[string]interface{}) {
@@ -37,6 +38,7 @@ func ClusterRun(params map[string]interface{}) {
 	Hostinfo.Pools = params["clusterPools"].([]string)
 
 	storage = getEtcdClient(params["etcdPort"].(string))
+
 	storedKeyTtl = uint64(params["etcdKeyTtl"].(int64))
 
 	err := Hostinfo.Refresh()
@@ -61,7 +63,7 @@ func storeContainers(containers map[string]lxc.Container) {
 		container, _ := json.Marshal(c)
 		_, err := storage.Create("containers/"+c.Name, string(container), storedKeyTtl)
 		if err != nil {
-			log.Warning("%v", err)
+			log.Fatal(err)
 		}
 	}
 }

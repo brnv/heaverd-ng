@@ -130,6 +130,12 @@ func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 		return
 	}
 
+	if intent.HostUpdateTimestamp != 0 &&
+		!isHostDataSynced(targetHost, intent.HostUpdateTimestamp) {
+		apiAnswer(w, "error", nil, http.StatusTeapot, nil, "Stale Data", nil)
+		return
+	}
+
 	intent.ContainerName = containerName
 	intent.PoolName = poolName
 	intent.TargetHost = targetHost
@@ -155,6 +161,14 @@ func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 	json.Unmarshal(hostAnswer, &newContainer)
 
 	apiAnswer(w, "ok", targetHost, http.StatusCreated, newContainer, nil, nil)
+}
+
+func isHostDataSynced(host string, controlTimestamp int64) bool {
+	if Cluster()[host].LastUpdateTimestamp < controlTimestamp {
+		return false
+	} else {
+		return true
+	}
 }
 
 func handleContainerStart(w web.ResponseWriter, r *web.Request) {
