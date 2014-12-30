@@ -53,6 +53,7 @@ func WebapiRun(params map[string]interface{}) {
 	apiRouter.
 		Get("/", handleHelp, "Show this help").
 		Get("/h/:hid/stats", handleStats, "Host :his resources statistics").
+		Get("/c/:cid/stats", handleContainerStats, "Container :cid statistics").
 		Get("/h/", handleHostsList, "Hosts list").
 		Post("/c/:cid", handleContainerCreate, "Create container :cid using balancer").
 		Post("/p/:poolid/:cid", handleContainerCreate,
@@ -85,6 +86,26 @@ func handleHelp(w web.ResponseWriter, r *web.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	j, _ := json.Marshal(apiRouter)
 	w.Write(j)
+}
+
+func handleContainerStats(w web.ResponseWriter, r *web.Request) {
+	var response []byte
+
+	containerName := r.PathParams["cid"]
+
+	for _, host := range Cluster() {
+		for _, container := range host.Containers {
+			if container.Name == containerName {
+				response, _ = json.Marshal(container)
+			}
+		}
+	}
+
+	if string(response) == "" {
+		w.WriteHeader(http.StatusNotFound)
+	}
+
+	w.Write(response)
 }
 
 func handleStats(w web.ResponseWriter, r *web.Request) {
