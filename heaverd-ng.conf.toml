@@ -1,0 +1,10 @@
+[cluster]
+port = "1444"
+pools = ["default"]
+[web]
+port = "8081"
+[static]
+dir = "/usr/share/heaverd-ng/"
+[etcd]
+port = "4041"
+keyttl = 20

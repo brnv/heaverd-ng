@@ -1,0 +1,12 @@
+[Unit]
+Description=heaverd-ng
+
+[Service]
+User=root
+PermissionsStartOnly=true
+ExecStart=/usr/bin/heaverd-ng
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target
