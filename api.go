@@ -105,6 +105,7 @@ func handleContainerStats(w web.ResponseWriter, r *web.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	w.Write(response)
 }
 
@@ -124,6 +125,8 @@ func handleHostsList(w web.ResponseWriter, r *web.Request) {
 
 	cluster := Cluster()
 	if len(cluster) == 0 {
+		w.WriteHeader(http.StatusInternalServerError)
+	} else if _, ok := cluster[Hostinfo.Hostname]; !ok {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 
@@ -153,7 +156,7 @@ func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 
 	if intent.HostUpdateTimestamp != 0 &&
 		!isHostDataSynced(targetHost, intent.HostUpdateTimestamp) {
-		apiAnswer(w, "error", nil, http.StatusTeapot, nil, "Stale Data", nil)
+		apiAnswer(w, "error", nil, http.StatusTeapot, nil, "Stale data", nil)
 		return
 	}
 
