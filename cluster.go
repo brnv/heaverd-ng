@@ -23,15 +23,6 @@ var (
 	storedKeyTtl          uint64
 )
 
-type Intent struct {
-	Image               []string `json:"image"`
-	Key                 string   `json:"key"`
-	ContainerName       string
-	PoolName            string
-	TargetHost          string
-	HostUpdateTimestamp int64
-}
-
 func ClusterRun(params map[string]interface{}) {
 	Hostinfo.Pools = params["clusterPools"].([]string)
 	storage = getEtcdClient(params["etcdPort"].(string))
@@ -78,15 +69,15 @@ func updateContainers(containers map[string]lxc.Container) error {
 	return nil
 }
 
-func StoreCreationIntent(intent Intent) error {
+func StoreRequestAsIntent(request CreateRequest) error {
 	intentContainer, _ := json.Marshal(lxc.Container{
-		Name:   intent.ContainerName,
-		Host:   intent.TargetHost,
+		Name:   request.ContainerName,
+		Host:   request.Host,
 		Status: intentContainerStatus,
-		Image:  intent.Image,
-		Key:    intent.Key,
+		Image:  request.Image,
+		Key:    request.SshKey,
 	})
-	_, err := storage.Create("containers/"+intent.ContainerName, string(intentContainer), storedKeyTtl)
+	_, err := storage.Create("containers/"+request.ContainerName, string(intentContainer), storedKeyTtl)
 	if err != nil {
 		return err
 	}

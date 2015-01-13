@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"html/template"
 
-	"github.com/brnv/heaverd-ng/liblxc"
-	"github.com/brnv/heaverd-ng/libscore"
 	"github.com/brnv/web"
 
 	"bufio"
@@ -13,18 +11,10 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
-	"strings"
 )
 
 type (
-	Context   struct{}
-	ApiAnswer struct {
-		Status     string      `json:"status"`
-		From       interface{} `json:"from"`
-		Msg        interface{} `json:"msg"`
-		Error      interface{} `json:"error"`
-		LastUpdate interface{} `json:"lastupdate"`
-	}
+	Context struct{}
 )
 
 const (
@@ -39,6 +29,14 @@ var (
 	staticDir   string
 	clusterPort string
 )
+
+type ApiAnswer struct {
+	Status     string      `json:"status"`
+	From       interface{} `json:"from"`
+	Msg        interface{} `json:"msg"`
+	Error      interface{} `json:"error"`
+	LastUpdate interface{} `json:"lastupdate"`
+}
 
 func WebapiRun(params map[string]interface{}) {
 	webPort = params["webPort"].(string)
@@ -143,55 +141,21 @@ func handleHostsList(w web.ResponseWriter, r *web.Request) {
 }
 
 func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
-	intent := Intent{}
+	createRequest := CreateRequest{
+		ContainerName: r.PathParams["cid"],
+		PoolName:      r.PathParams["poolid"],
+	}
 
-	err := json.NewDecoder(r.Body).Decode(&intent)
+	err := json.NewDecoder(r.Body).Decode(&createRequest)
 	if err != nil {
 		if err != io.EOF {
 			log.Error(err.Error())
 		}
 	}
 
-	r.ParseForm()
-	containerName := r.PathParams["cid"]
-	poolName := r.PathParams["poolid"]
+	response := createRequest.Execute()
 
-	targetHost, err := getMostSuitableHost(containerName, poolName)
-	if err != nil {
-		log.Error(err.Error())
-		apiAnswer(w, "error", nil, http.StatusNotFound, nil, err.Error(), nil)
-		return
-	}
-
-	if intent.HostUpdateTimestamp > Cluster()[targetHost].LastUpdateTimestamp {
-		apiAnswer(w, "error", nil, http.StatusTeapot, nil, "Stale data", nil)
-		return
-	}
-
-	intent.ContainerName = containerName
-	intent.PoolName = poolName
-	intent.TargetHost = targetHost
-
-	err = StoreCreationIntent(intent)
-	if err != nil {
-		if strings.Contains(err.Error(), etcdErrCodeKeyExists) {
-			apiAnswer(w, "error", targetHost, http.StatusConflict, nil, "Not unique name", nil)
-		}
-		return
-	}
-
-	creationMessage := makeMessage("container-create", intent.ContainerName)
-	hostAnswer, _ := sendMessageToHost(targetHost, clusterPort, creationMessage)
-
-	if strings.Contains(string(hostAnswer), "Error") {
-		apiAnswer(w, "error", targetHost, http.StatusNotFound, nil, string(hostAnswer), nil)
-		return
-	}
-
-	createdContainer := lxc.Container{}
-	json.Unmarshal(hostAnswer, &createdContainer)
-
-	apiAnswer(w, "ok", targetHost, http.StatusCreated, createdContainer, nil, nil)
+	response.Send(w)
 }
 
 func handleContainerStart(w web.ResponseWriter, r *web.Request) {
@@ -274,15 +238,6 @@ func apiAnswer(w web.ResponseWriter, status string, from interface{}, code int,
 	})
 	w.WriteHeader(code)
 	w.Write(answer)
-}
-
-func getMostSuitableHost(containerName string, poolName string) (string, error) {
-	segments := libscore.Segments(Cluster(poolName))
-	host, err := libscore.ChooseHost(containerName, segments)
-	if err != nil {
-		return "", err
-	}
-	return host, nil
 }
 
 func sendMessageToHost(host string, port string, message []byte) ([]byte, error) {
