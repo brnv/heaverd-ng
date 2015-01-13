@@ -27,7 +27,8 @@ var usage = `Heaverd-ng.
 
 	Options:
 	-h|--help			Show this screen.
-	--config=<path>		Configuration file [default: /etc/heaverd-ng/heaverd-ng.conf.toml].`
+	--config=<path>		Configuration file [default: /etc/heaverd-ng/heaverd-ng.conf.toml].
+`
 
 func main() {
 	args, _ := docopt.Parse(usage, nil, true, "heaverd-ng", false)

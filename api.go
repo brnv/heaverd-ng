@@ -29,12 +29,12 @@ type (
 
 const (
 	etcdErrCodeKeyExists = "105"
-	apiVersion           = "v2"
+	apiPrefix            = "/v2"
 )
 
 var (
 	rootRouter  = web.New(Context{})
-	apiRouter   = rootRouter.Subrouter(Context{}, "/"+apiVersion)
+	apiRouter   = rootRouter.Subrouter(Context{}, apiPrefix)
 	webPort     string
 	staticDir   string
 	clusterPort string
@@ -83,59 +83,68 @@ func handleScore(w web.ResponseWriter, r *web.Request) {
 }
 
 func handleHelp(w web.ResponseWriter, r *web.Request) {
-	w.Header().Set("Content-Type", "application/json")
 	j, _ := json.Marshal(apiRouter)
+	w.Header().Set("Content-Type", "application/json")
 	w.Write(j)
 }
 
 func handleContainerStats(w web.ResponseWriter, r *web.Request) {
-	var response []byte
-
 	containerName := r.PathParams["cid"]
+	stats := []byte{}
 
 	for _, host := range Cluster() {
 		for _, container := range host.Containers {
 			if container.Name == containerName {
-				response, _ = json.Marshal(container)
+				stats, _ = json.Marshal(container)
+				break
 			}
+		}
+
+		if len(stats) > 0 {
+			break
 		}
 	}
 
-	if string(response) == "" {
+	if len(stats) == 0 {
 		w.WriteHeader(http.StatusNotFound)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(response)
+	w.Write(stats)
 }
 
 func handleStats(w web.ResponseWriter, r *web.Request) {
 	hostname := r.PathParams["hid"]
 	stats := []byte{}
+
 	if hostname == "" {
 		stats, _ = json.Marshal(Hostinfo)
 	} else {
 		stats, _ = json.Marshal(Cluster()[hostname])
 	}
+
+	w.Header().Set("Content-Type", "application/json")
 	w.Write(stats)
 }
 
 func handleHostsList(w web.ResponseWriter, r *web.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	cluster := Cluster()
+
 	if len(cluster) == 0 {
 		w.WriteHeader(http.StatusInternalServerError)
 	} else if _, ok := cluster[Hostinfo.Hostname]; !ok {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 
-	response, _ := json.Marshal(cluster)
-	w.Write(response)
+	hostsList, _ := json.Marshal(cluster)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(hostsList)
 }
 
 func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 	intent := Intent{}
+
 	err := json.NewDecoder(r.Body).Decode(&intent)
 	if err != nil {
 		if err != io.EOF {
@@ -147,15 +156,14 @@ func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 	containerName := r.PathParams["cid"]
 	poolName := r.PathParams["poolid"]
 
-	targetHost, err := getPreferedHost(containerName, poolName)
+	targetHost, err := getMostSuitableHost(containerName, poolName)
 	if err != nil {
 		log.Error(err.Error())
 		apiAnswer(w, "error", nil, http.StatusNotFound, nil, err.Error(), nil)
 		return
 	}
 
-	if intent.HostUpdateTimestamp != 0 &&
-		!isHostDataSynced(targetHost, intent.HostUpdateTimestamp) {
+	if intent.HostUpdateTimestamp > Cluster()[targetHost].LastUpdateTimestamp {
 		apiAnswer(w, "error", nil, http.StatusTeapot, nil, "Stale data", nil)
 		return
 	}
@@ -164,7 +172,7 @@ func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 	intent.PoolName = poolName
 	intent.TargetHost = targetHost
 
-	err = CreateIntent(intent)
+	err = StoreCreationIntent(intent)
 	if err != nil {
 		if strings.Contains(err.Error(), etcdErrCodeKeyExists) {
 			apiAnswer(w, "error", targetHost, http.StatusConflict, nil, "Not unique name", nil)
@@ -172,27 +180,18 @@ func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 		return
 	}
 
-	createMessage := makeMessage("container-create", intent.ContainerName)
-
-	hostAnswer, _ := sendTcpMessage(targetHost, clusterPort, createMessage)
+	creationMessage := makeMessage("container-create", intent.ContainerName)
+	hostAnswer, _ := sendMessageToHost(targetHost, clusterPort, creationMessage)
 
 	if strings.Contains(string(hostAnswer), "Error") {
 		apiAnswer(w, "error", targetHost, http.StatusNotFound, nil, string(hostAnswer), nil)
 		return
 	}
 
-	newContainer := lxc.Container{}
-	json.Unmarshal(hostAnswer, &newContainer)
+	createdContainer := lxc.Container{}
+	json.Unmarshal(hostAnswer, &createdContainer)
 
-	apiAnswer(w, "ok", targetHost, http.StatusCreated, newContainer, nil, nil)
-}
-
-func isHostDataSynced(host string, controlTimestamp int64) bool {
-	if Cluster()[host].LastUpdateTimestamp < controlTimestamp {
-		return false
-	} else {
-		return true
-	}
+	apiAnswer(w, "ok", targetHost, http.StatusCreated, createdContainer, nil, nil)
 }
 
 func handleContainerStart(w web.ResponseWriter, r *web.Request) {
@@ -208,14 +207,14 @@ func handleContainerDestroy(w web.ResponseWriter, r *web.Request) {
 }
 
 func controlContainer(action string, w web.ResponseWriter, r *web.Request) {
-	var hostname interface{}
+	hostname := ""
 	containerName := r.PathParams["cid"]
 
 	if _, ok := r.PathParams["hid"]; ok {
 		hostname = r.PathParams["hid"]
 	} else {
 		hostname = getHostnameByContainer(containerName)
-		if hostname == nil {
+		if hostname == "" {
 			apiAnswer(w, "error", hostname, http.StatusNotFound, nil, "Unknown container", nil)
 			return
 		}
@@ -239,7 +238,7 @@ func controlContainer(action string, w web.ResponseWriter, r *web.Request) {
 		action,
 	})
 
-	rawAnswer, _ := sendTcpMessage(hostname, clusterPort, controlMessage)
+	rawAnswer, _ := sendMessageToHost(hostname, clusterPort, controlMessage)
 	answer := struct {
 		From       string
 		Code       int
@@ -277,7 +276,7 @@ func apiAnswer(w web.ResponseWriter, status string, from interface{}, code int,
 	w.Write(answer)
 }
 
-func getPreferedHost(containerName string, poolName string) (string, error) {
+func getMostSuitableHost(containerName string, poolName string) (string, error) {
 	segments := libscore.Segments(Cluster(poolName))
 	host, err := libscore.ChooseHost(containerName, segments)
 	if err != nil {
@@ -286,8 +285,8 @@ func getPreferedHost(containerName string, poolName string) (string, error) {
 	return host, nil
 }
 
-func sendTcpMessage(host interface{}, port string, message []byte) ([]byte, error) {
-	connection, err := net.Dial("tcp", host.(string)+":"+port)
+func sendMessageToHost(host string, port string, message []byte) ([]byte, error) {
+	connection, err := net.Dial("tcp", host+":"+port)
 	if err != nil {
 		return []byte{}, err
 	}
@@ -305,35 +304,35 @@ func sendTcpMessage(host interface{}, port string, message []byte) ([]byte, erro
 	return []byte(answer), nil
 }
 
-func isHostExists(name interface{}) bool {
-	if _, ok := Cluster()[name.(string)]; !ok {
+func isHostExists(name string) bool {
+	if _, ok := Cluster()[name]; !ok {
 		return false
 	}
 	return true
 }
 
-func isContainerExists(hostname interface{}, name string) bool {
-	if _, ok := Cluster()[hostname.(string)].Containers[name]; !ok {
+func isContainerExists(hostname string, name string) bool {
+	if _, ok := Cluster()[hostname].Containers[name]; !ok {
 		return false
 	}
 	return true
 }
 
-func getHostnameByContainer(containerName string) interface{} {
+func getHostnameByContainer(containerName string) string {
 	for hostname, host := range Cluster() {
 		if _, ok := host.Containers[containerName]; ok {
 			return hostname
 		}
 	}
-	return nil
+	return ""
 }
 
-func makeMessage(header string, body interface{}) []byte {
+func makeMessage(tag string, body interface{}) []byte {
 	message, _ := json.Marshal(struct {
-		Type string
+		Tag  string
 		Body interface{}
 	}{
-		header,
+		tag,
 		body,
 	})
 	return message
@@ -342,21 +341,27 @@ func makeMessage(header string, body interface{}) []byte {
 func handleHostContainerCreate(w web.ResponseWriter, r *web.Request) {
 	http.Error(w, "handleHostContainerCreate", 501)
 }
+
 func handleHostContainerUpdate(w web.ResponseWriter, r *web.Request) {
 	http.Error(w, "handleHostContainerUpdate", 501)
 }
+
 func handleContainerInfo(w web.ResponseWriter, r *web.Request) {
 	http.Error(w, "handleContainerInfo", 501)
 }
+
 func handleContainerPing(w web.ResponseWriter, r *web.Request) {
 	http.Error(w, "handleContainerPing", 501)
 }
+
 func handleHostOperation(w web.ResponseWriter, r *web.Request) {
 	http.Error(w, "handleHostOperation", 501)
 }
+
 func handleHostContainersList(w web.ResponseWriter, r *web.Request) {
 	http.Error(w, "handleHostContainersList", 501)
 }
+
 func handleHostByContainer(w web.ResponseWriter, r *web.Request) {
 	http.Error(w, "handleHostByContainer", 501)
 }

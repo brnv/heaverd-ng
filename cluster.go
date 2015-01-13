@@ -33,13 +33,11 @@ type Intent struct {
 }
 
 func ClusterRun(params map[string]interface{}) {
-	go listenForMessages(params["clusterPort"].(string))
-
 	Hostinfo.Pools = params["clusterPools"].([]string)
-
 	storage = getEtcdClient(params["etcdPort"].(string))
-
 	storedKeyTtl = uint64(params["etcdKeyTtl"].(int64))
+
+	go listenForMessages(params["clusterPort"].(string))
 
 	err := Hostinfo.Refresh()
 	if err != nil {
@@ -54,6 +52,7 @@ func ClusterRun(params map[string]interface{}) {
 			log.Error(err.Error())
 			storage = getEtcdClient(params["etcdPort"].(string))
 		}
+
 		time.Sleep(time.Second)
 	}
 }
@@ -79,7 +78,7 @@ func updateContainers(containers map[string]lxc.Container) error {
 	return nil
 }
 
-func CreateIntent(intent Intent) error {
+func StoreCreationIntent(intent Intent) error {
 	intentContainer, _ := json.Marshal(lxc.Container{
 		Name:   intent.ContainerName,
 		Host:   intent.TargetHost,
@@ -132,7 +131,7 @@ func listenForMessages(port string) {
 	log.Info("listening for messages on :%s", port)
 
 	message := struct {
-		Type string
+		Tag  string
 		Body json.RawMessage
 	}{}
 
@@ -149,7 +148,7 @@ func listenForMessages(port string) {
 			if err != nil {
 				log.Error(err.Error())
 			}
-			switch message.Type {
+			switch message.Tag {
 			case "container-create":
 				var containerName string
 
