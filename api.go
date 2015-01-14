@@ -141,25 +141,30 @@ func handleHostsList(w web.ResponseWriter, r *web.Request) {
 }
 
 func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
-	createRequest := CreateRequest{
-		ContainerName: r.PathParams["cid"],
-		PoolName:      r.PathParams["poolid"],
-	}
+	request := ContainerCreateRequest{}
+	request.ContainerName = r.PathParams["cid"]
+	request.PoolName = r.PathParams["poolid"]
 
-	err := json.NewDecoder(r.Body).Decode(&createRequest)
+	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
 		if err != io.EOF {
 			log.Error(err.Error())
 		}
 	}
 
-	response := createRequest.Execute()
+	response := request.Execute()
 
 	response.Send(w)
 }
 
 func handleContainerStart(w web.ResponseWriter, r *web.Request) {
-	controlContainer("start", w, r)
+	request := ContainerStartRequest{}
+	request.ContainerName = r.PathParams["cid"]
+	request.Host = r.PathParams["hid"]
+
+	response := request.Execute()
+
+	response.Send(w)
 }
 
 func handleContainerStop(w web.ResponseWriter, r *web.Request) {

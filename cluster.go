@@ -69,7 +69,7 @@ func updateContainers(containers map[string]lxc.Container) error {
 	return nil
 }
 
-func StoreRequestAsIntent(request CreateRequest) error {
+func StoreRequestAsIntent(request ContainerCreateRequest) error {
 	intentContainer, _ := json.Marshal(lxc.Container{
 		Name:   request.ContainerName,
 		Host:   request.Host,
@@ -172,6 +172,9 @@ func listenForMessages(port string) {
 				err = heaver.Control(Control.ContainerName, Control.Action)
 				timestamp := time.Now().UnixNano()
 				if err != nil {
+					// @TODO
+					// looks like it has to be 500 code
+					// see cluster.go listenForMessages()
 					messageSocket.Write(answer(409, "", err.Error(), timestamp))
 				} else {
 					if Control.Action == "destroy" {

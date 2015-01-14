@@ -1,79 +1,77 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
-	"strings"
-
-	"github.com/brnv/heaverd-ng/liblxc"
-	"github.com/brnv/heaverd-ng/libscore"
+	"errors"
+	"io"
+	"net"
 )
 
 type Request interface {
 	Execute()
 }
 
-type CreateRequest struct {
-	Host          string
-	ContainerName string
-	PoolName      string
-	Image         []string `json:"image"`
-	SshKey        string   `json:"key"`
-	Token         int64
-}
-
-func (request CreateRequest) GetMostSuitableHost() (string, error) {
-	segments := libscore.Segments(Cluster(request.PoolName))
-
-	suitableHost, err := libscore.ChooseHost(request.ContainerName, segments)
-	if err != nil {
-		return "", err
+type (
+	BaseRequest struct {
+		Host          string
+		ContainerName string
 	}
+)
 
-	return suitableHost, nil
-}
-
-func (request CreateRequest) Execute() Response {
-	targetHost, err := request.GetMostSuitableHost()
-
-	if err != nil {
-		response := CantAssignAnyHostResponse{}
-		response.Error = err.Error()
-		response.ResponseHost = Hostinfo.Hostname
-		return response
-	}
-
-	if request.Token > Cluster()[targetHost].LastUpdateTimestamp {
-		response := StaleDataResponse{}
-		response.ResponseHost = Hostinfo.Hostname
-		return response
-	}
-
-	request.Host = targetHost
-	err = StoreRequestAsIntent(request)
-	if err != nil {
-		if strings.Contains(err.Error(), etcdErrCodeKeyExists) {
-			response := NotUniqueNameResponse{}
-			response.ResponseHost = targetHost
-			return response
+func (request BaseRequest) GetHostnameByContainer() (string, error) {
+	for hostname, host := range Cluster() {
+		if _, ok := host.Containers[request.ContainerName]; ok {
+			return hostname, nil
 		}
 	}
 
-	creationMessage := makeMessage("container-create", request.ContainerName)
-	hostAnswer, _ := sendMessageToHost(targetHost, clusterPort, creationMessage)
+	return "", errors.New("")
+}
 
-	if strings.Contains(string(hostAnswer), "Error") {
-		response := ErrorResponse{}
-		response.Error = string(hostAnswer)
-		return response
+func (request BaseRequest) IsHostExists() bool {
+	if _, ok := Cluster()[request.Host]; !ok {
+		return false
 	}
 
-	createdContainer := lxc.Container{}
-	json.Unmarshal(hostAnswer, &createdContainer)
+	return true
+}
 
-	response := ContainerCreatedResponse{
-		Container: createdContainer,
+func (request BaseRequest) IsContainerExists() bool {
+	if _, ok := Cluster()[request.Host].Containers[request.ContainerName]; !ok {
+		return false
 	}
-	response.ResponseHost = targetHost
 
-	return response
+	return true
+}
+
+func (request BaseRequest) MakeMessage(tag string, body interface{}) []byte {
+	message, _ := json.Marshal(struct {
+		Tag  string
+		Body interface{}
+	}{
+		tag,
+		body,
+	})
+
+	return message
+}
+
+func (request BaseRequest) SendMessage(message []byte) ([]byte, error) {
+	connection, err := net.Dial("tcp", request.Host+":"+clusterPort)
+	if err != nil {
+		return []byte{}, err
+	}
+	defer connection.Close()
+
+	connection.Write(message)
+
+	answer, err := bufio.NewReader(connection).ReadString('\n')
+	if err != nil {
+		if err != io.EOF {
+			return []byte{}, err
+		}
+	}
+
+	return []byte(answer), nil
 }
