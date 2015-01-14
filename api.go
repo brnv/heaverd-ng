@@ -6,10 +6,8 @@ import (
 
 	"github.com/brnv/web"
 
-	"bufio"
 	"io"
 	"math/rand"
-	"net"
 	"net/http"
 )
 
@@ -178,130 +176,13 @@ func handleContainerStop(w web.ResponseWriter, r *web.Request) {
 }
 
 func handleContainerDestroy(w web.ResponseWriter, r *web.Request) {
-	controlContainer("destroy", w, r)
-}
+	request := ContainerDestroyRequest{}
+	request.ContainerName = r.PathParams["cid"]
+	request.Host = r.PathParams["hid"]
 
-func controlContainer(action string, w web.ResponseWriter, r *web.Request) {
-	hostname := ""
-	containerName := r.PathParams["cid"]
+	response := request.Execute()
 
-	if _, ok := r.PathParams["hid"]; ok {
-		hostname = r.PathParams["hid"]
-	} else {
-		hostname = getHostnameByContainer(containerName)
-		if hostname == "" {
-			apiAnswer(w, "error", hostname, http.StatusNotFound, nil, "Unknown container", nil)
-			return
-		}
-	}
-
-	if !isHostExists(hostname) {
-		apiAnswer(w, "error", nil, http.StatusNotFound, nil, "Unknown host", nil)
-		return
-	}
-
-	if !isContainerExists(hostname, containerName) {
-		apiAnswer(w, "error", hostname, http.StatusNotFound, nil, "Unknown container", nil)
-		return
-	}
-
-	controlMessage := makeMessage("container-control", struct {
-		ContainerName string
-		Action        string
-	}{
-		containerName,
-		action,
-	})
-
-	rawAnswer, _ := sendMessageToHost(hostname, clusterPort, controlMessage)
-	answer := struct {
-		From       string
-		Code       int
-		Text       string
-		Error      string
-		LastUpdate int64
-	}{}
-
-	err := json.Unmarshal(rawAnswer, &answer)
-	if err != nil {
-		apiAnswer(w, "error", nil, http.StatusInternalServerError, nil, err.Error(), nil)
-		return
-	}
-
-	status := "ok"
-	if answer.Code != 200 {
-		status = "error"
-	}
-
-	apiAnswer(w, status, answer.From, answer.Code, answer.Text, answer.Error, answer.LastUpdate)
-}
-
-func apiAnswer(w web.ResponseWriter, status string, from interface{}, code int,
-	msg interface{}, err interface{}, lastUpdate interface{},
-) {
-	w.Header().Set("Content-Type", "application/json")
-	answer, _ := json.Marshal(ApiAnswer{
-		Status:     status,
-		From:       from,
-		Msg:        msg,
-		Error:      err,
-		LastUpdate: lastUpdate,
-	})
-	w.WriteHeader(code)
-	w.Write(answer)
-}
-
-func sendMessageToHost(host string, port string, message []byte) ([]byte, error) {
-	connection, err := net.Dial("tcp", host+":"+port)
-	if err != nil {
-		return []byte{}, err
-	}
-	defer connection.Close()
-
-	connection.Write(message)
-
-	answer, err := bufio.NewReader(connection).ReadString('\n')
-	if err != nil {
-		if err != io.EOF {
-			return []byte{}, err
-		}
-	}
-
-	return []byte(answer), nil
-}
-
-func isHostExists(name string) bool {
-	if _, ok := Cluster()[name]; !ok {
-		return false
-	}
-	return true
-}
-
-func isContainerExists(hostname string, name string) bool {
-	if _, ok := Cluster()[hostname].Containers[name]; !ok {
-		return false
-	}
-	return true
-}
-
-func getHostnameByContainer(containerName string) string {
-	for hostname, host := range Cluster() {
-		if _, ok := host.Containers[containerName]; ok {
-			return hostname
-		}
-	}
-	return ""
-}
-
-func makeMessage(tag string, body interface{}) []byte {
-	message, _ := json.Marshal(struct {
-		Tag  string
-		Body interface{}
-	}{
-		tag,
-		body,
-	})
-	return message
+	response.Send(w)
 }
 
 func handleHostContainerCreate(w web.ResponseWriter, r *web.Request) {

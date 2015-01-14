@@ -14,6 +14,10 @@ type (
 	ContainerStopRequest struct {
 		ContainerControlRequest
 	}
+
+	ContainerDestroyRequest struct {
+		ContainerControlRequest
+	}
 )
 
 func (request ContainerStartRequest) Execute() Response {
@@ -22,6 +26,10 @@ func (request ContainerStartRequest) Execute() Response {
 
 func (request ContainerStopRequest) Execute() Response {
 	return request.GetResponse("stop")
+}
+
+func (request ContainerDestroyRequest) Execute() Response {
+	return request.GetResponse("destroy")
 }
 
 func (
@@ -101,11 +109,10 @@ func (request ContainerControlRequest) GetResponse(action string) Response {
 
 	switch answer.Code {
 	case 409:
-		return HeaverErrorResponse{
-			ErrorResponse: ErrorResponse{
-				Error: answer.Error,
-			},
-		}
+		response := HeaverErrorResponse{}
+		response.Error = answer.Error
+		response.ResponseHost = answer.From
+		return response
 	}
 
 	return ContainerControlResponse{
