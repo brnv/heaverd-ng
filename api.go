@@ -168,7 +168,13 @@ func handleContainerStart(w web.ResponseWriter, r *web.Request) {
 }
 
 func handleContainerStop(w web.ResponseWriter, r *web.Request) {
-	controlContainer("stop", w, r)
+	request := ContainerStopRequest{}
+	request.ContainerName = r.PathParams["cid"]
+	request.Host = r.PathParams["hid"]
+
+	response := request.Execute()
+
+	response.Send(w)
 }
 
 func handleContainerDestroy(w web.ResponseWriter, r *web.Request) {

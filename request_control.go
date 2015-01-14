@@ -20,6 +20,10 @@ func (request ContainerStartRequest) Execute() Response {
 	return request.GetResponse("start")
 }
 
+func (request ContainerStopRequest) Execute() Response {
+	return request.GetResponse("stop")
+}
+
 func (
 	request ContainerControlRequest,
 ) SendControlMessage(action string) ([]byte, error) {
