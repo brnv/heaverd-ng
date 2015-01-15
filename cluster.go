@@ -256,7 +256,17 @@ func createContainer(name string) (lxc.Container, error) {
 }
 
 func hostinfoUpdate() error {
-	err := Hostinfo.Refresh()
+	containers, err := heaver.ListContainers(Hostinfo.Hostname)
+	if err != nil {
+		return err
+	}
+
+	err = updateContainers(containers)
+	if err != nil {
+		return err
+	}
+
+	err = Hostinfo.Refresh()
 	if err != nil {
 		return err
 	}
@@ -266,12 +276,6 @@ func hostinfoUpdate() error {
 	if err != nil {
 		return err
 	}
-
-	err = updateContainers(Hostinfo.Containers)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
