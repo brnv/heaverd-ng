@@ -28,14 +28,6 @@ var (
 	clusterPort string
 )
 
-type ApiAnswer struct {
-	Status     string      `json:"status"`
-	From       interface{} `json:"from"`
-	Msg        interface{} `json:"msg"`
-	Error      interface{} `json:"error"`
-	LastUpdate interface{} `json:"lastupdate"`
-}
-
 func WebapiRun(params map[string]interface{}) {
 	webPort = params["webPort"].(string)
 	staticDir = params["staticDir"].(string)
@@ -56,6 +48,7 @@ func WebapiRun(params map[string]interface{}) {
 		"Create container :cid inside :poolid pool using balancer").
 		Post("/h/:hid/:cid/start", handleContainerStart, "Start container").
 		Post("/c/:cid/start", handleContainerStart, "Start container").
+		Post("/c/:cid/push", handleContainerPush, "Push container's rootfs into image").
 		Post("/h/:hid/:cid/stop", handleContainerStop, "Terminate container").
 		Post("/c/:cid/stop", handleContainerStop, "Terminate container").
 		Delete("/h/:hid/:cid", handleContainerDestroy, "Destroy container").
@@ -138,6 +131,22 @@ func handleHostsList(w web.ResponseWriter, r *web.Request) {
 	w.Write(hostsList)
 }
 
+func handleContainerPush(w web.ResponseWriter, r *web.Request) {
+	request := ContainerPushRequest{}
+	request.ContainerName = r.PathParams["cid"]
+
+	err := json.NewDecoder(r.Body).Decode(&request)
+	if err != nil {
+		if err != io.EOF {
+			log.Error(err.Error())
+		}
+	}
+
+	response := request.Execute()
+
+	response.Write(w)
+}
+
 func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 	request := ContainerCreateRequest{}
 	request.ContainerName = r.PathParams["cid"]
@@ -152,37 +161,31 @@ func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 
 	response := request.Execute()
 
-	response.Send(w)
+	response.Write(w)
 }
 
 func handleContainerStart(w web.ResponseWriter, r *web.Request) {
 	request := ContainerStartRequest{}
 	request.ContainerName = r.PathParams["cid"]
-	request.Host = r.PathParams["hid"]
-
+	request.RequestHost = r.PathParams["hid"]
 	response := request.Execute()
-
-	response.Send(w)
+	response.Write(w)
 }
 
 func handleContainerStop(w web.ResponseWriter, r *web.Request) {
 	request := ContainerStopRequest{}
 	request.ContainerName = r.PathParams["cid"]
-	request.Host = r.PathParams["hid"]
-
+	request.RequestHost = r.PathParams["hid"]
 	response := request.Execute()
-
-	response.Send(w)
+	response.Write(w)
 }
 
 func handleContainerDestroy(w web.ResponseWriter, r *web.Request) {
 	request := ContainerDestroyRequest{}
 	request.ContainerName = r.PathParams["cid"]
-	request.Host = r.PathParams["hid"]
-
+	request.RequestHost = r.PathParams["hid"]
 	response := request.Execute()
-
-	response.Send(w)
+	response.Write(w)
 }
 
 func handleHostContainerCreate(w web.ResponseWriter, r *web.Request) {

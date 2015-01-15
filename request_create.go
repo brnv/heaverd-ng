@@ -11,8 +11,8 @@ import (
 type ContainerCreateRequest struct {
 	BaseRequest
 	PoolName string
-	Image    []string `json:"image"`
-	SshKey   string   `json:"key"`
+	Image    []string
+	SshKey   string
 	Token    int64
 }
 
@@ -29,8 +29,7 @@ func (request ContainerCreateRequest) GetMostSuitableHost() (string, error) {
 
 func (request ContainerCreateRequest) Execute() Response {
 	var err error
-	request.Host, err = request.GetMostSuitableHost()
-
+	request.RequestHost, err = request.GetMostSuitableHost()
 	if err != nil {
 		response := CantAssignAnyHostResponse{}
 		response.Error = err.Error()
@@ -38,23 +37,26 @@ func (request ContainerCreateRequest) Execute() Response {
 		return response
 	}
 
-	if request.Token > Cluster()[request.Host].LastUpdateTimestamp {
+	if request.Token > Cluster()[request.RequestHost].LastUpdateTimestamp {
 		response := StaleDataResponse{}
 		response.ResponseHost = Hostinfo.Hostname
 		return response
 	}
 
+	request.Action = "create"
+
 	err = StoreRequestAsIntent(request)
 	if err != nil {
 		if strings.Contains(err.Error(), etcdErrCodeKeyExists) {
 			response := NotUniqueNameResponse{}
-			response.ResponseHost = request.Host
+			response.ResponseHost = request.RequestHost
 			return response
 		}
 	}
 
-	hostAnswer, err := request.SendMessage(
-		request.MakeMessage("container-create", request.ContainerName))
+	payload, _ := json.Marshal(request)
+
+	raw, err := request.SendMessage(payload)
 
 	if err != nil {
 		response := ContainerCreationErrorResponse{
@@ -65,22 +67,22 @@ func (request ContainerCreateRequest) Execute() Response {
 		return response
 	}
 
-	if strings.Contains(string(hostAnswer), "Error") {
+	if strings.Contains(string(raw), "Error") {
 		response := ContainerCreationErrorResponse{
 			ErrorResponse: ErrorResponse{
-				Error: string(hostAnswer),
+				Error: string(raw),
 			},
 		}
 		return response
 	}
 
 	createdContainer := lxc.Container{}
-	json.Unmarshal(hostAnswer, &createdContainer)
+	json.Unmarshal(raw, &createdContainer)
 
 	response := ContainerCreatedResponse{
 		Container: createdContainer,
 	}
-	response.ResponseHost = request.Host
+	response.ResponseHost = request.RequestHost
 
 	return response
 }

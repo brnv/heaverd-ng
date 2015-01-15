@@ -2,22 +2,24 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"errors"
 	"io"
 	"net"
 )
 
-type Request interface {
-	Execute()
+type BaseRequest struct {
+	Action        string
+	RequestHost   string
+	ContainerName string
 }
 
-type (
-	BaseRequest struct {
-		Host          string
-		ContainerName string
+func (request BaseRequest) GetTargetHostname() string {
+	if request.RequestHost == "" {
+		host, _ := request.GetHostnameByContainer()
+		return host
 	}
-)
+	return request.RequestHost
+}
 
 func (request BaseRequest) GetHostnameByContainer() (string, error) {
 	for hostname, host := range Cluster() {
@@ -30,7 +32,7 @@ func (request BaseRequest) GetHostnameByContainer() (string, error) {
 }
 
 func (request BaseRequest) IsHostExists() bool {
-	if _, ok := Cluster()[request.Host]; !ok {
+	if _, ok := Cluster()[request.RequestHost]; !ok {
 		return false
 	}
 
@@ -38,27 +40,15 @@ func (request BaseRequest) IsHostExists() bool {
 }
 
 func (request BaseRequest) IsContainerExists() bool {
-	if _, ok := Cluster()[request.Host].Containers[request.ContainerName]; !ok {
+	if _, ok := Cluster()[request.RequestHost].Containers[request.ContainerName]; !ok {
 		return false
 	}
 
 	return true
 }
 
-func (request BaseRequest) MakeMessage(tag string, body interface{}) []byte {
-	message, _ := json.Marshal(struct {
-		Tag  string
-		Body interface{}
-	}{
-		tag,
-		body,
-	})
-
-	return message
-}
-
 func (request BaseRequest) SendMessage(message []byte) ([]byte, error) {
-	connection, err := net.Dial("tcp", request.Host+":"+clusterPort)
+	connection, err := net.Dial("tcp", request.RequestHost+":"+clusterPort)
 	if err != nil {
 		return []byte{}, err
 	}

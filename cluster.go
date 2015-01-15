@@ -72,7 +72,7 @@ func updateContainers(containers map[string]lxc.Container) error {
 func StoreRequestAsIntent(request ContainerCreateRequest) error {
 	intentContainer, _ := json.Marshal(lxc.Container{
 		Name:   request.ContainerName,
-		Host:   request.Host,
+		Host:   request.RequestHost,
 		Status: intentContainerStatus,
 		Image:  request.Image,
 		Key:    request.SshKey,
@@ -121,95 +121,100 @@ func listenForMessages(port string) {
 
 	log.Info("listening for messages on :%s", port)
 
-	message := struct {
-		Tag  string
-		Body json.RawMessage
-	}{}
-
 	for {
-		messageSocket, err := listener.Accept()
+		request := make(map[string]interface{})
+
+		socket, err := listener.Accept()
 		if err != nil {
 			log.Error(err.Error())
 			continue
 		}
+		defer socket.Close()
 
-		go func() {
-			defer messageSocket.Close()
-			err = json.NewDecoder(messageSocket).Decode(&message)
+		err = json.NewDecoder(socket).Decode(&request)
+		if err != nil {
+			log.Error(err.Error())
+		}
+
+		timestamp := time.Now().UnixNano()
+
+		log.Info("RECEIVER: GET REQUEST %d (%v) ", timestamp, request)
+
+		ContainerControlCallback := func() error {
+			err = heaver.Control(
+				request["ContainerName"].(string), request["Action"].(string),
+			)
 			if err != nil {
-				log.Error(err.Error())
+				return err
 			}
-			switch message.Tag {
-			case "container-create":
-				var containerName string
 
-				err := json.Unmarshal(message.Body, &containerName)
-				if err != nil {
-					log.Error(err.Error())
-					messageSocket.Write([]byte("Error:" + err.Error()))
-					return
-				}
-
-				newContainer, err := createContainer(containerName)
-				if err != nil {
-					log.Error(err.Error())
-					messageSocket.Write([]byte("Error:" + err.Error()))
-					return
-				}
-
-				result, _ := json.Marshal(newContainer)
-				messageSocket.Write(result)
-			case "container-control":
-				var Control struct {
-					ContainerName string
-					Action        string
-				}
-				err := json.Unmarshal(message.Body, &Control)
-				if err != nil {
-					log.Error(err.Error())
-				}
-
-				err = heaver.Control(Control.ContainerName, Control.Action)
-				timestamp := time.Now().UnixNano()
-				if err != nil {
-					// @TODO
-					// looks like it has to be 500 code
-					// see cluster.go listenForMessages()
-					messageSocket.Write(answer(409, "", err.Error(), timestamp))
-				} else {
-					if Control.Action == "destroy" {
-						storage.Delete(
-							"containers/"+Control.ContainerName, false)
-					}
-
-					err = hostinfoUpdate()
-					if err != nil {
-						messageSocket.Write(answer(409, "", err.Error(), timestamp))
-						return
-					}
-
-					messageSocket.Write(answer(200, "ok", "", timestamp))
-				}
-			default:
-				log.Notice("unknown message %s", message)
+			err = hostinfoUpdate()
+			if err != nil {
+				return err
 			}
-		}()
+
+			return nil
+		}
+
+		switch request["Action"] {
+		case "create":
+			newContainer, err := createContainer(request["ContainerName"].(string))
+			if err != nil {
+				log.Error("RECEIVER: %d %s", timestamp, err.Error())
+				socket.Write([]byte("Error:" + err.Error()))
+			}
+
+			result, _ := json.Marshal(newContainer)
+			socket.Write(result)
+		case "start":
+			err = ContainerControlCallback()
+			if err != nil {
+				log.Error("RECEIVER: %d %s", timestamp, err.Error())
+				socket.Write(answer(409, "", err.Error(), timestamp))
+			} else {
+				socket.Write(answer(200, "ok", "", timestamp))
+			}
+		case "stop":
+			err = ContainerControlCallback()
+			if err != nil {
+				log.Error("RECEIVER: %d %s", timestamp, err.Error())
+				socket.Write(answer(409, "", err.Error(), timestamp))
+			} else {
+				socket.Write(answer(200, "ok", "", timestamp))
+			}
+		case "destroy":
+			err = ContainerControlCallback()
+			if err != nil {
+				log.Error("RECEIVER: %d %s", timestamp, err.Error())
+				socket.Write(answer(409, "", err.Error(), timestamp))
+			} else {
+				storage.Delete(
+					"containers/"+request["ContainerName"].(string), false)
+				socket.Write(answer(200, "ok", "", timestamp))
+			}
+		default:
+			log.Info("RECEIVER: UNDEFINED %d", timestamp)
+		}
+
+		socket.Close()
+
+		log.Info("RECEIVER: DONE REQUEST %d", timestamp)
 	}
 }
 
 func answer(code int, text string, err string, time int64) []byte {
 	answer, _ := json.Marshal(struct {
-		From       string
-		Msg        string
-		Error      string
-		LastUpdate int64
-		Code       int
+		From  string
+		Msg   string
+		Error string
+		Token int64
+		Code  int
 	}{
-		From:       Hostinfo.Hostname,
-		Msg:        text,
-		Error:      err,
-		LastUpdate: time,
-		Code:       code,
+		From:  Hostinfo.Hostname,
+		Msg:   text,
+		Error: err,
+		Token: time,
+		Code:  code,
 	})
 	return answer
 }
@@ -231,8 +236,6 @@ func createContainer(name string) (lxc.Container, error) {
 			container.Status + ", not " + intentContainerStatus)
 	}
 
-	log.Notice("creating container %s on host %s...", name, Hostinfo.Hostname)
-
 	_, err = storage.Delete("containers/"+name, false)
 	if err != nil {
 		return lxc.Container{}, err
@@ -248,8 +251,6 @@ func createContainer(name string) (lxc.Container, error) {
 	if err != nil {
 		log.Error(err.Error())
 	}
-
-	log.Notice("... done")
 
 	return newContainer, nil
 }

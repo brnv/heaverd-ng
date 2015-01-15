@@ -21,64 +21,31 @@ type (
 )
 
 func (request ContainerStartRequest) Execute() Response {
-	return request.GetResponse("start")
+	request.Action = "start"
+	return request.Send()
 }
 
 func (request ContainerStopRequest) Execute() Response {
-	return request.GetResponse("stop")
+	request.Action = "stop"
+	return request.Send()
 }
 
 func (request ContainerDestroyRequest) Execute() Response {
-	return request.GetResponse("destroy")
+	request.Action = "destroy"
+	return request.Send()
 }
 
-func (
-	request ContainerControlRequest,
-) SendControlMessage(action string) ([]byte, error) {
-	return request.SendMessage(
-		request.MakeMessage("container-control", struct {
-			ContainerName string
-			Action        string
-		}{
-			request.ContainerName,
-			action,
-		}),
-	)
-}
+func (request ContainerControlRequest) Send() Response {
+	request.RequestHost = request.GetTargetHostname()
 
-func (request ContainerControlRequest) GetErrorResponse() Response {
-	if request.Host == "" {
-		var err error
-		request.Host, err = request.GetHostnameByContainer()
-		if err != nil {
-			response := CantFindContainerHostnameResponse{}
-			response.ResponseHost = Hostinfo.Hostname
-			return response
-		}
-	}
-
-	if !request.IsHostExists() {
-		response := HostNotFoundResponse{}
-		response.ResponseHost = Hostinfo.Hostname
-		return response
-	}
-
-	if !request.IsContainerExists() {
-		response := ContainerNotFoundResponse{}
-		response.ResponseHost = Hostinfo.Hostname
-		return response
-	}
-
-	return nil
-}
-
-func (request ContainerControlRequest) GetResponse(action string) Response {
 	errorResponse := request.GetErrorResponse()
 	if errorResponse != nil {
 		return errorResponse
 	}
 
-	raw, err := request.SendControlMessage(action)
+	payload, _ := json.Marshal(request)
+
+	raw, err := request.SendMessage(payload)
 
 	if err != nil {
 		response := ContainerControlErrorResponse{
@@ -90,11 +57,11 @@ func (request ContainerControlRequest) GetResponse(action string) Response {
 	}
 
 	answer := struct {
-		From       string
-		Msg        string
-		Error      string
-		LastUpdate int64
-		Code       int
+		From  string
+		Msg   string
+		Error string
+		Token int64
+		Code  int
 	}{}
 
 	err = json.Unmarshal(raw, &answer)
@@ -119,6 +86,33 @@ func (request ContainerControlRequest) GetResponse(action string) Response {
 		BaseResponse: BaseResponse{
 			ResponseHost: answer.From,
 		},
-		Token: answer.LastUpdate,
+		Token: answer.Token,
 	}
+
+}
+
+func (request ContainerControlRequest) GetErrorResponse() Response {
+	if request.RequestHost == "" {
+		var err error
+		request.RequestHost, err = request.GetHostnameByContainer()
+		if err != nil {
+			response := CantFindContainerHostnameResponse{}
+			response.ResponseHost = Hostinfo.Hostname
+			return response
+		}
+	}
+
+	if !request.IsHostExists() {
+		response := HostNotFoundResponse{}
+		response.ResponseHost = Hostinfo.Hostname
+		return response
+	}
+
+	if !request.IsContainerExists() {
+		response := ContainerNotFoundResponse{}
+		response.ResponseHost = Hostinfo.Hostname
+		return response
+	}
+
+	return nil
 }
