@@ -7,51 +7,68 @@ import (
 )
 
 type (
-	ErrorResponse struct {
-		BaseResponse
-		Error string `json:"error"`
-	}
-
 	ServerErrorResponse struct {
-		ErrorResponse
+		BaseResponse
 	}
 
 	CantAssignAnyHostResponse struct {
-		ErrorResponse
+		BaseResponse
 	}
 
 	StaleDataResponse struct {
-		ErrorResponse
+		BaseResponse
 	}
 
 	NotUniqueNameResponse struct {
-		ErrorResponse
+		BaseResponse
 	}
 
 	ContainerCreationErrorResponse struct {
-		ErrorResponse
+		BaseResponse
 	}
 
 	ContainerControlErrorResponse struct {
-		ErrorResponse
+		BaseResponse
 	}
 
 	CantFindContainerHostnameResponse struct {
-		ErrorResponse
+		BaseResponse
 	}
 
 	ContainerNotFoundResponse struct {
-		ErrorResponse
+		BaseResponse
 	}
 
 	HostNotFoundResponse struct {
-		ErrorResponse
+		BaseResponse
 	}
 
 	HeaverErrorResponse struct {
-		ErrorResponse
+		BaseResponse
+	}
+
+	ContainerPushErrorResponse struct {
+		BaseResponse
+	}
+
+	ContainerStartErrorResponse struct {
+		BaseResponse
 	}
 )
+
+func (response ContainerStartErrorResponse) Write(w web.ResponseWriter) {
+	response.Status = "error"
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusInternalServerError)
+	ResponseSend(w, response)
+}
+
+func (response ContainerPushErrorResponse) Write(w web.ResponseWriter) {
+	response.Status = "error"
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusInternalServerError)
+	ResponseSend(w, response)
+}
 
 func (response CantFindContainerHostnameResponse) Write(w web.ResponseWriter) {
 	response.Status = "error"

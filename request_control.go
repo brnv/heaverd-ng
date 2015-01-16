@@ -22,7 +22,36 @@ type (
 
 func (request ContainerStartRequest) Execute() Response {
 	request.Action = "start"
-	return request.Send()
+	errorResponse := request.GetErrorResponse()
+	if errorResponse != nil {
+		return errorResponse
+	}
+
+	request.RequestHost = request.GetTargetHostname()
+
+	payload, _ := json.Marshal(request)
+
+	raw, err := request.SendMessage(payload)
+	if err != nil {
+		return ContainerStartErrorResponse{
+			BaseResponse: BaseResponse{
+				ResponseHost: request.RequestHost,
+				Error:        err.Error(),
+			},
+		}
+	}
+
+	var response ContainerStartResponse
+
+	err = json.Unmarshal(raw, &response)
+
+	if response.Error != "" {
+		return ContainerStartErrorResponse{
+			BaseResponse: response.BaseResponse,
+		}
+	}
+
+	return response
 }
 
 func (request ContainerStopRequest) Execute() Response {
@@ -49,7 +78,7 @@ func (request ContainerControlRequest) Send() Response {
 
 	if err != nil {
 		response := ContainerControlErrorResponse{
-			ErrorResponse: ErrorResponse{
+			BaseResponse: BaseResponse{
 				Error: err.Error(),
 			},
 		}
@@ -67,7 +96,7 @@ func (request ContainerControlRequest) Send() Response {
 	err = json.Unmarshal(raw, &answer)
 	if err != nil {
 		response := ServerErrorResponse{
-			ErrorResponse: ErrorResponse{
+			BaseResponse: BaseResponse{
 				Error: err.Error(),
 			},
 		}
@@ -88,31 +117,4 @@ func (request ContainerControlRequest) Send() Response {
 		},
 		Token: answer.Token,
 	}
-
-}
-
-func (request ContainerControlRequest) GetErrorResponse() Response {
-	if request.RequestHost == "" {
-		var err error
-		request.RequestHost, err = request.GetHostnameByContainer()
-		if err != nil {
-			response := CantFindContainerHostnameResponse{}
-			response.ResponseHost = Hostinfo.Hostname
-			return response
-		}
-	}
-
-	if !request.IsHostExists() {
-		response := HostNotFoundResponse{}
-		response.ResponseHost = Hostinfo.Hostname
-		return response
-	}
-
-	if !request.IsContainerExists() {
-		response := ContainerNotFoundResponse{}
-		response.ResponseHost = Hostinfo.Hostname
-		return response
-	}
-
-	return nil
 }

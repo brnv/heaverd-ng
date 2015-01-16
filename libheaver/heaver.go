@@ -1,6 +1,7 @@
 package heaver
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"os/exec"
@@ -8,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/brnv/heaverd-ng/liblxc"
+	"github.com/op/go-logging"
 )
 
 var (
@@ -15,12 +17,14 @@ var (
 	netInterfaceArgs = []string{"--net", "br0"}
 	controlArgs      = []string{"heaver", "", ""}
 	listArgs         = []string{"heaver", "-Lm", "--format", "json"}
-	startArg         = "-Sn"
+	startArgs        = []string{"heaver", "-Sn"}
 	stopArg          = "-Tn"
 	destroyArg       = "-Dn"
+	pushArg          = []string{"heaver", "-Pn"}
 	reStarted        = regexp.MustCompile("started")
 	reStopped        = regexp.MustCompile("stopped")
 	reDestroyed      = regexp.MustCompile("destroyed")
+	rePushed         = regexp.MustCompile("pushed")
 )
 
 const (
@@ -34,7 +38,10 @@ type Image struct {
 	ZfsPath string `json:"zfs_path"`
 }
 
-func Create(containerName string, image []string, key string) (lxc.Container, error) {
+func Create(containerName string,
+	image []string,
+	key string,
+) (lxc.Container, error) {
 	createArgs[2] = containerName
 
 	args := createArgs
@@ -50,12 +57,12 @@ func Create(containerName string, image []string, key string) (lxc.Container, er
 		args = append(args, n)
 	}
 
-	cmd := getHeaverCmd(args)
+	output, err := getHeaverOutput(args)
 
-	output, err := cmd.Output()
 	if err != nil {
-		return lxc.Container{Status: "error"}, errors.New(string(output))
+		return lxc.Container{Status: "error"}, err
 	}
+
 	messages := strings.Split(string(output), "\n")
 
 	heaverOutputJson := struct {
@@ -89,12 +96,27 @@ func Create(containerName string, image []string, key string) (lxc.Container, er
 	return container, nil
 }
 
+func Push(containerName string, image string) error {
+	args := append(pushArg, containerName)
+	args = append(args, "-i")
+	args = append(args, image)
+
+	_, err := getHeaverOutput(args)
+
+	return err
+}
+
+func Start(containerName string) error {
+	args := append(startArgs, containerName)
+
+	_, err := getHeaverOutput(args)
+
+	return err
+}
+
 func Control(containerName string, action string) error {
 	var reControl *regexp.Regexp
 	switch action {
-	case "start":
-		controlArgs[1] = startArg
-		reControl = reStarted
 	case "stop":
 		controlArgs[1] = stopArg
 		reControl = reStopped
@@ -104,12 +126,12 @@ func Control(containerName string, action string) error {
 	}
 	controlArgs[2] = containerName
 
-	answer, err := getHeaverCmd(controlArgs).Output()
+	output, err := getHeaverOutput(controlArgs)
 	if err != nil {
-		return errors.New(string(answer))
+		return err
 	}
 
-	matches := reControl.FindStringSubmatch(string(answer))
+	matches := reControl.FindStringSubmatch(string(output))
 	if matches == nil {
 		return errors.New("Can't perform " + action)
 	}
@@ -118,8 +140,7 @@ func Control(containerName string, action string) error {
 }
 
 func ListContainers(host string) (map[string]lxc.Container, error) {
-	cmd := getHeaverCmd(listArgs)
-	output, err := cmd.Output()
+	output, err := getHeaverOutput(listArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -187,10 +208,25 @@ func ListImages() (map[string]Image, error) {
 	return list, nil
 }
 
-func getHeaverCmd(args []string) *exec.Cmd {
+var log = logging.MustGetLogger("")
+
+func getHeaverOutput(args []string) ([]byte, error) {
 	cmd := &exec.Cmd{
 		Path: "/usr/bin/heaver",
 		Args: args,
 	}
-	return cmd
+
+	var output bytes.Buffer
+	var stderr bytes.Buffer
+
+	cmd.Stdout = &output
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+
+	if err != nil {
+		return nil, errors.New(stderr.String())
+	}
+
+	return output.Bytes(), nil
 }

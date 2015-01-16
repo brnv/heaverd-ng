@@ -138,7 +138,7 @@ func listenForMessages(port string) {
 
 		timestamp := time.Now().UnixNano()
 
-		log.Info("RECEIVER: GET REQUEST %d (%v) ", timestamp, request)
+		log.Info("RECEIVER: %d %v", timestamp, request)
 
 		ContainerControlCallback := func() error {
 			err = heaver.Control(
@@ -156,6 +156,8 @@ func listenForMessages(port string) {
 			return nil
 		}
 
+		var errorMessage string
+
 		switch request["Action"] {
 		case "create":
 			newContainer, err := createContainer(request["ContainerName"].(string))
@@ -167,13 +169,23 @@ func listenForMessages(port string) {
 			result, _ := json.Marshal(newContainer)
 			socket.Write(result)
 		case "start":
-			err = ContainerControlCallback()
+			err := heaver.Start(
+				request["ContainerName"].(string),
+			)
+
 			if err != nil {
-				log.Error("RECEIVER: %d %s", timestamp, err.Error())
-				socket.Write(answer(409, "", err.Error(), timestamp))
-			} else {
-				socket.Write(answer(200, "ok", "", timestamp))
+				errorMessage = err.Error()
 			}
+
+			response, _ := json.Marshal(ContainerStartResponse{
+				BaseResponse: BaseResponse{
+					ResponseHost: Hostinfo.Hostname,
+					Error:        errorMessage,
+				},
+				Token: timestamp,
+			})
+
+			socket.Write(response)
 		case "stop":
 			err = ContainerControlCallback()
 			if err != nil {
@@ -192,13 +204,32 @@ func listenForMessages(port string) {
 					"containers/"+request["ContainerName"].(string), false)
 				socket.Write(answer(200, "ok", "", timestamp))
 			}
+		case "push":
+			err := heaver.Push(
+				request["ContainerName"].(string),
+				request["Image"].(string),
+			)
+
+			if err != nil {
+				errorMessage = err.Error()
+			}
+
+			response, _ := json.Marshal(ContainerPushResponse{
+				BaseResponse: BaseResponse{
+					ResponseHost: Hostinfo.Hostname,
+					Error:        errorMessage,
+				},
+			})
+
+			socket.Write(response)
 		default:
-			log.Info("RECEIVER: UNDEFINED %d", timestamp)
+			socket.Write(answer(400, "error", "", timestamp))
+			log.Info("RECEIVER: %d UNDEFINED", timestamp)
 		}
 
 		socket.Close()
 
-		log.Info("RECEIVER: DONE REQUEST %d", timestamp)
+		log.Info("RECEIVER: %d DONE", timestamp)
 	}
 }
 

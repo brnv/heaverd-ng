@@ -49,6 +49,7 @@ func WebapiRun(params map[string]interface{}) {
 		Post("/h/:hid/:cid/start", handleContainerStart, "Start container").
 		Post("/c/:cid/start", handleContainerStart, "Start container").
 		Post("/c/:cid/push", handleContainerPush, "Push container's rootfs into image").
+		Post("/h/:hid/:cid/push", handleContainerPush, "Push container's rootfs into image").
 		Post("/h/:hid/:cid/stop", handleContainerStop, "Terminate container").
 		Post("/c/:cid/stop", handleContainerStop, "Terminate container").
 		Delete("/h/:hid/:cid", handleContainerDestroy, "Destroy container").

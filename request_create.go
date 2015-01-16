@@ -60,7 +60,7 @@ func (request ContainerCreateRequest) Execute() Response {
 
 	if err != nil {
 		response := ContainerCreationErrorResponse{
-			ErrorResponse: ErrorResponse{
+			BaseResponse: BaseResponse{
 				Error: err.Error(),
 			},
 		}
@@ -69,7 +69,7 @@ func (request ContainerCreateRequest) Execute() Response {
 
 	if strings.Contains(string(raw), "Error") {
 		response := ContainerCreationErrorResponse{
-			ErrorResponse: ErrorResponse{
+			BaseResponse: BaseResponse{
 				Error: string(raw),
 			},
 		}
@@ -79,7 +79,7 @@ func (request ContainerCreateRequest) Execute() Response {
 	createdContainer := lxc.Container{}
 	json.Unmarshal(raw, &createdContainer)
 
-	response := ContainerCreatedResponse{
+	response := ContainerCreateResponse{
 		Container: createdContainer,
 	}
 	response.ResponseHost = request.RequestHost

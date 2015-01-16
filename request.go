@@ -65,3 +65,29 @@ func (request BaseRequest) SendMessage(message []byte) ([]byte, error) {
 
 	return []byte(answer), nil
 }
+
+func (request BaseRequest) GetErrorResponse() Response {
+	if request.RequestHost == "" {
+		var err error
+		request.RequestHost, err = request.GetHostnameByContainer()
+		if err != nil {
+			response := CantFindContainerHostnameResponse{}
+			response.ResponseHost = Hostinfo.Hostname
+			return response
+		}
+	}
+
+	if !request.IsHostExists() {
+		response := HostNotFoundResponse{}
+		response.ResponseHost = Hostinfo.Hostname
+		return response
+	}
+
+	if !request.IsContainerExists() {
+		response := ContainerNotFoundResponse{}
+		response.ResponseHost = Hostinfo.Hostname
+		return response
+	}
+
+	return nil
+}
