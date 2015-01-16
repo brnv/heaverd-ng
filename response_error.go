@@ -54,7 +54,29 @@ type (
 	ContainerStartErrorResponse struct {
 		BaseResponse
 	}
+
+	ContainerStopErrorResponse struct {
+		BaseResponse
+	}
+
+	ContainerDestroyErrorResponse struct {
+		BaseResponse
+	}
 )
+
+func (response ContainerStopErrorResponse) Write(w web.ResponseWriter) {
+	response.Status = "error"
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusInternalServerError)
+	ResponseSend(w, response)
+}
+
+func (response ContainerDestroyErrorResponse) Write(w web.ResponseWriter) {
+	response.Status = "error"
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusInternalServerError)
+	ResponseSend(w, response)
+}
 
 func (response ContainerStartErrorResponse) Write(w web.ResponseWriter) {
 	response.Status = "error"

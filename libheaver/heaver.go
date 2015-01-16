@@ -5,11 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"os/exec"
-	"regexp"
 	"strings"
 
 	"github.com/brnv/heaverd-ng/liblxc"
-	"github.com/op/go-logging"
 )
 
 var (
@@ -18,13 +16,9 @@ var (
 	controlArgs      = []string{"heaver", "", ""}
 	listArgs         = []string{"heaver", "-Lm", "--format", "json"}
 	startArgs        = []string{"heaver", "-Sn"}
-	stopArg          = "-Tn"
-	destroyArg       = "-Dn"
+	stopArgs         = []string{"heaver", "-Tn"}
+	destroyArgs      = []string{"heaver", "-Dn"}
 	pushArg          = []string{"heaver", "-Pn"}
-	reStarted        = regexp.MustCompile("started")
-	reStopped        = regexp.MustCompile("stopped")
-	reDestroyed      = regexp.MustCompile("destroyed")
-	rePushed         = regexp.MustCompile("pushed")
 )
 
 const (
@@ -114,29 +108,20 @@ func Start(containerName string) error {
 	return err
 }
 
-func Control(containerName string, action string) error {
-	var reControl *regexp.Regexp
-	switch action {
-	case "stop":
-		controlArgs[1] = stopArg
-		reControl = reStopped
-	case "destroy":
-		controlArgs[1] = destroyArg
-		reControl = reDestroyed
-	}
-	controlArgs[2] = containerName
+func Stop(containerName string) error {
+	args := append(stopArgs, containerName)
 
-	output, err := getHeaverOutput(controlArgs)
-	if err != nil {
-		return err
-	}
+	_, err := getHeaverOutput(args)
 
-	matches := reControl.FindStringSubmatch(string(output))
-	if matches == nil {
-		return errors.New("Can't perform " + action)
-	}
+	return err
+}
 
-	return nil
+func Destroy(containerName string) error {
+	args := append(destroyArgs, containerName)
+
+	_, err := getHeaverOutput(args)
+
+	return err
 }
 
 func ListContainers(host string) (map[string]lxc.Container, error) {
@@ -208,8 +193,6 @@ func ListImages() (map[string]Image, error) {
 	return list, nil
 }
 
-var log = logging.MustGetLogger("")
-
 func getHeaverOutput(args []string) ([]byte, error) {
 	cmd := &exec.Cmd{
 		Path: "/usr/bin/heaver",
@@ -224,8 +207,10 @@ func getHeaverOutput(args []string) ([]byte, error) {
 
 	err := cmd.Run()
 
-	if err != nil {
+	if err != nil && stderr.String() != "" {
 		return nil, errors.New(stderr.String())
+	} else if err != nil {
+		return nil, errors.New(output.String())
 	}
 
 	return output.Bytes(), nil

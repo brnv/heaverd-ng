@@ -56,12 +56,70 @@ func (request ContainerStartRequest) Execute() Response {
 
 func (request ContainerStopRequest) Execute() Response {
 	request.Action = "stop"
-	return request.Send()
+	errorResponse := request.GetErrorResponse()
+	if errorResponse != nil {
+		return errorResponse
+	}
+
+	request.RequestHost = request.GetTargetHostname()
+
+	payload, _ := json.Marshal(request)
+
+	raw, err := request.SendMessage(payload)
+	if err != nil {
+		return ContainerStopErrorResponse{
+			BaseResponse: BaseResponse{
+				ResponseHost: request.RequestHost,
+				Error:        err.Error(),
+			},
+		}
+	}
+
+	var response ContainerStopResponse
+
+	err = json.Unmarshal(raw, &response)
+
+	if response.Error != "" {
+		return ContainerStopErrorResponse{
+			BaseResponse: response.BaseResponse,
+		}
+	}
+
+	return response
 }
 
 func (request ContainerDestroyRequest) Execute() Response {
 	request.Action = "destroy"
-	return request.Send()
+	errorResponse := request.GetErrorResponse()
+	if errorResponse != nil {
+		return errorResponse
+	}
+
+	request.RequestHost = request.GetTargetHostname()
+
+	payload, _ := json.Marshal(request)
+
+	raw, err := request.SendMessage(payload)
+	if err != nil {
+		return ContainerDestroyErrorResponse{
+			BaseResponse: BaseResponse{
+				ResponseHost: request.RequestHost,
+				Error:        err.Error(),
+			},
+		}
+	}
+
+	var response ContainerDestroyResponse
+
+	err = json.Unmarshal(raw, &response)
+
+	if response.Error != "" {
+		return ContainerDestroyErrorResponse{
+			BaseResponse: response.BaseResponse,
+		}
+	}
+
+	return response
 }
 
 func (request ContainerControlRequest) Send() Response {

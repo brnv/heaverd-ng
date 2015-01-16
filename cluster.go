@@ -140,22 +140,6 @@ func listenForMessages(port string) {
 
 		log.Info("RECEIVER: %d %v", timestamp, request)
 
-		ContainerControlCallback := func() error {
-			err = heaver.Control(
-				request["ContainerName"].(string), request["Action"].(string),
-			)
-			if err != nil {
-				return err
-			}
-
-			err = hostinfoUpdate()
-			if err != nil {
-				return err
-			}
-
-			return nil
-		}
-
 		var errorMessage string
 
 		switch request["Action"] {
@@ -168,6 +152,7 @@ func listenForMessages(port string) {
 
 			result, _ := json.Marshal(newContainer)
 			socket.Write(result)
+
 		case "start":
 			err := heaver.Start(
 				request["ContainerName"].(string),
@@ -186,24 +171,48 @@ func listenForMessages(port string) {
 			})
 
 			socket.Write(response)
+
 		case "stop":
-			err = ContainerControlCallback()
+			err := heaver.Stop(
+				request["ContainerName"].(string),
+			)
+
 			if err != nil {
-				log.Error("RECEIVER: %d %s", timestamp, err.Error())
-				socket.Write(answer(409, "", err.Error(), timestamp))
-			} else {
-				socket.Write(answer(200, "ok", "", timestamp))
+				errorMessage = err.Error()
 			}
+
+			response, _ := json.Marshal(ContainerStopResponse{
+				BaseResponse: BaseResponse{
+					ResponseHost: Hostinfo.Hostname,
+					Error:        errorMessage,
+				},
+				Token: timestamp,
+			})
+
+			socket.Write(response)
+
 		case "destroy":
-			err = ContainerControlCallback()
+			err := heaver.Destroy(
+				request["ContainerName"].(string),
+			)
+
 			if err != nil {
-				log.Error("RECEIVER: %d %s", timestamp, err.Error())
-				socket.Write(answer(409, "", err.Error(), timestamp))
-			} else {
-				storage.Delete(
-					"containers/"+request["ContainerName"].(string), false)
-				socket.Write(answer(200, "ok", "", timestamp))
+				errorMessage = err.Error()
 			}
+
+			response, _ := json.Marshal(ContainerDestroyResponse{
+				BaseResponse: BaseResponse{
+					ResponseHost: Hostinfo.Hostname,
+					Error:        errorMessage,
+				},
+				Token: timestamp,
+			})
+
+			storage.Delete(
+				"containers/"+request["ContainerName"].(string), false)
+
+			socket.Write(response)
+
 		case "push":
 			err := heaver.Push(
 				request["ContainerName"].(string),
@@ -222,6 +231,7 @@ func listenForMessages(port string) {
 			})
 
 			socket.Write(response)
+
 		default:
 			socket.Write(answer(400, "error", "", timestamp))
 			log.Info("RECEIVER: %d UNDEFINED", timestamp)
