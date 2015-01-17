@@ -135,6 +135,7 @@ func handleHostsList(w web.ResponseWriter, r *web.Request) {
 func handleContainerPush(w web.ResponseWriter, r *web.Request) {
 	request := ContainerPushRequest{}
 	request.ContainerName = r.PathParams["cid"]
+	request.RequestHost = r.PathParams["hid"]
 
 	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {

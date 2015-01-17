@@ -23,7 +23,7 @@ type (
 		BaseResponse
 	}
 
-	ContainerCreationErrorResponse struct {
+	ContainerCreateErrorResponse struct {
 		BaseResponse
 	}
 
@@ -31,7 +31,7 @@ type (
 		BaseResponse
 	}
 
-	CantFindContainerHostnameResponse struct {
+	CantFindHostnameByContainerResponse struct {
 		BaseResponse
 	}
 
@@ -62,7 +62,19 @@ type (
 	ContainerDestroyErrorResponse struct {
 		BaseResponse
 	}
+
+	ImageMustBeGivenErrorResponse struct {
+		BaseResponse
+	}
 )
+
+func (response ImageMustBeGivenErrorResponse) Write(w web.ResponseWriter) {
+	response.Status = "error"
+	response.Error = "Image must be given"
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusBadRequest)
+	ResponseSend(w, response)
+}
 
 func (response ContainerStopErrorResponse) Write(w web.ResponseWriter) {
 	response.Status = "error"
@@ -92,7 +104,7 @@ func (response ContainerPushErrorResponse) Write(w web.ResponseWriter) {
 	ResponseSend(w, response)
 }
 
-func (response CantFindContainerHostnameResponse) Write(w web.ResponseWriter) {
+func (response CantFindHostnameByContainerResponse) Write(w web.ResponseWriter) {
 	response.Status = "error"
 	response.Error = "Can't find host by given container"
 	w.WriteHeader(http.StatusNotFound)
@@ -140,7 +152,7 @@ func (response NotUniqueNameResponse) Write(w web.ResponseWriter) {
 	ResponseSend(w, response)
 }
 
-func (response ContainerCreationErrorResponse) Write(w web.ResponseWriter) {
+func (response ContainerCreateErrorResponse) Write(w web.ResponseWriter) {
 	response.Status = "error"
 	w.WriteHeader(http.StatusInternalServerError)
 	ResponseSend(w, response)

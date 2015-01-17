@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/brnv/heaverd-ng/liblxc"
 	"github.com/brnv/heaverd-ng/libscore"
 )
 
@@ -16,73 +15,86 @@ type ContainerCreateRequest struct {
 	Token    int64
 }
 
-func (request ContainerCreateRequest) GetMostSuitableHost() (string, error) {
-	segments := libscore.Segments(Cluster(request.PoolName))
-
-	suitableHost, err := libscore.ChooseHost(request.ContainerName, segments)
-	if err != nil {
-		return "", err
-	}
-
-	return suitableHost, nil
-}
-
 func (request ContainerCreateRequest) Execute() Response {
-	var err error
-	request.RequestHost, err = request.GetMostSuitableHost()
-	if err != nil {
-		response := CantAssignAnyHostResponse{}
-		response.Error = err.Error()
-		response.ResponseHost = Hostinfo.Hostname
-		return response
-	}
-
-	if request.Token > Cluster()[request.RequestHost].LastUpdateTimestamp {
-		response := StaleDataResponse{}
-		response.ResponseHost = Hostinfo.Hostname
-		return response
-	}
-
 	request.Action = "create"
+	request.RequestHost = request.GetMostSuitableHost()
 
-	err = StoreRequestAsIntent(request)
+	errorResponse := request.Validate()
+	if errorResponse != nil {
+		return errorResponse
+	}
+
+	err := StoreRequestAsIntent(request)
 	if err != nil {
 		if strings.Contains(err.Error(), etcdErrCodeKeyExists) {
-			response := NotUniqueNameResponse{}
-			response.ResponseHost = request.RequestHost
-			return response
+			return NotUniqueNameResponse{
+				BaseResponse: BaseResponse{
+					ResponseHost: request.RequestHost,
+				},
+			}
 		}
 	}
 
 	payload, _ := json.Marshal(request)
-
-	raw, err := request.SendMessage(payload)
+	response, err := request.Send(request.RequestHost, payload)
 
 	if err != nil {
-		response := ContainerCreationErrorResponse{
+		return ContainerCreateErrorResponse{
 			BaseResponse: BaseResponse{
-				Error: err.Error(),
+				ResponseHost: request.RequestHost,
+				Error:        err.Error(),
 			},
 		}
+	}
+
+	if err != nil {
 		return response
 	}
 
-	if strings.Contains(string(raw), "Error") {
-		response := ContainerCreationErrorResponse{
+	if response.(ClusterResponse).Error != "" {
+		return ContainerCreateErrorResponse{
 			BaseResponse: BaseResponse{
-				Error: string(raw),
+				ResponseHost: request.RequestHost,
+				Error:        response.(ClusterResponse).Error,
 			},
 		}
+	}
+
+	return ContainerCreateResponse{
+		BaseResponse: response.(ClusterResponse).BaseResponse,
+		Container:    response.(ClusterResponse).Container,
+	}
+}
+
+func (request ContainerCreateRequest) Validate() Response {
+	if request.RequestHost == "" {
+		return CantAssignAnyHostResponse{
+			BaseResponse: BaseResponse{
+				ResponseHost: Hostinfo.Hostname,
+			},
+		}
+	}
+
+	if request.Token > Cluster()[request.RequestHost].LastUpdateTimestamp {
+		return StaleDataResponse{
+			BaseResponse: BaseResponse{
+				ResponseHost: Hostinfo.Hostname,
+			},
+		}
+	}
+
+	if len(request.Image) == 0 {
+		response := ImageMustBeGivenErrorResponse{}
+		response.ResponseHost = Hostinfo.Hostname
 		return response
 	}
 
-	createdContainer := lxc.Container{}
-	json.Unmarshal(raw, &createdContainer)
+	return nil
+}
 
-	response := ContainerCreateResponse{
-		Container: createdContainer,
-	}
-	response.ResponseHost = request.RequestHost
+func (request ContainerCreateRequest) GetMostSuitableHost() string {
+	segments := libscore.Segments(Cluster(request.PoolName))
+	suitableHost, _ := libscore.ChooseHost(request.ContainerName, segments)
 
-	return response
+	return suitableHost
 }

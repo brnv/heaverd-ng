@@ -9,34 +9,51 @@ type ContainerPushRequest struct {
 
 func (request ContainerPushRequest) Execute() Response {
 	request.Action = "push"
-	errorResponse := request.GetErrorResponse()
+
+	if request.RequestHost == "" {
+		request.RequestHost = request.FindHostname()
+	}
+
+	errorResponse := request.Validate()
 	if errorResponse != nil {
 		return errorResponse
 	}
 
-	request.RequestHost = request.GetTargetHostname()
-
 	payload, _ := json.Marshal(request)
+	response, err := request.Send(request.RequestHost, payload)
 
-	raw, err := request.SendMessage(payload)
 	if err != nil {
+		if response == nil {
+			return ContainerPushErrorResponse{
+				BaseResponse: BaseResponse{
+					ResponseHost: request.RequestHost,
+					Error:        err.Error(),
+				},
+			}
+		}
+		return response
+	}
+
+	if response.(ClusterResponse).Error != "" {
 		return ContainerPushErrorResponse{
 			BaseResponse: BaseResponse{
 				ResponseHost: request.RequestHost,
-				Error:        err.Error(),
+				Error:        response.(ClusterResponse).Error,
 			},
 		}
 	}
 
-	var response ContainerPushResponse
+	return ContainerPushResponse{
+		BaseResponse: response.(ClusterResponse).BaseResponse,
+	}
+}
 
-	err = json.Unmarshal(raw, &response)
-
-	if response.Error != "" {
-		return ContainerPushErrorResponse{
-			BaseResponse: response.BaseResponse,
-		}
+func (request ContainerPushRequest) Validate() Response {
+	if request.Image == "" {
+		response := ImageMustBeGivenErrorResponse{}
+		response.ResponseHost = Hostinfo.Hostname
+		return response
 	}
 
-	return response
+	return request.BaseRequest.Validate()
 }

@@ -144,14 +144,20 @@ func listenForMessages(port string) {
 
 		switch request["Action"] {
 		case "create":
-			newContainer, err := createContainer(request["ContainerName"].(string))
+			container, err := createContainer(request["ContainerName"].(string))
 			if err != nil {
-				log.Error("RECEIVER: %d %s", timestamp, err.Error())
-				socket.Write([]byte("Error:" + err.Error()))
+				errorMessage = err.Error()
 			}
 
-			result, _ := json.Marshal(newContainer)
-			socket.Write(result)
+			response, _ := json.Marshal(ClusterResponse{
+				BaseResponse: BaseResponse{
+					ResponseHost: Hostinfo.Hostname,
+					Error:        errorMessage,
+				},
+				Container: container,
+			})
+
+			socket.Write(response)
 
 		case "start":
 			err := heaver.Start(
@@ -162,12 +168,11 @@ func listenForMessages(port string) {
 				errorMessage = err.Error()
 			}
 
-			response, _ := json.Marshal(ContainerStartResponse{
+			response, _ := json.Marshal(ClusterResponse{
 				BaseResponse: BaseResponse{
 					ResponseHost: Hostinfo.Hostname,
 					Error:        errorMessage,
 				},
-				Token: timestamp,
 			})
 
 			socket.Write(response)
@@ -181,12 +186,11 @@ func listenForMessages(port string) {
 				errorMessage = err.Error()
 			}
 
-			response, _ := json.Marshal(ContainerStopResponse{
+			response, _ := json.Marshal(ClusterResponse{
 				BaseResponse: BaseResponse{
 					ResponseHost: Hostinfo.Hostname,
 					Error:        errorMessage,
 				},
-				Token: timestamp,
 			})
 
 			socket.Write(response)
@@ -200,7 +204,7 @@ func listenForMessages(port string) {
 				errorMessage = err.Error()
 			}
 
-			response, _ := json.Marshal(ContainerDestroyResponse{
+			response, _ := json.Marshal(ClusterResponse{
 				BaseResponse: BaseResponse{
 					ResponseHost: Hostinfo.Hostname,
 					Error:        errorMessage,

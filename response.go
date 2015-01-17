@@ -19,9 +19,10 @@ type (
 		Error        string `json:"error"`
 	}
 
-	ContainerControlResponse struct {
+	ClusterResponse struct {
 		BaseResponse
-		Token int64 `json:"token"`
+		Token     int64 `json:"token"`
+		Container lxc.Container
 	}
 
 	ContainerCreateResponse struct {
@@ -35,12 +36,10 @@ type (
 
 	ContainerStartResponse struct {
 		BaseResponse
-		Token int64 `json:"token"`
 	}
 
 	ContainerStopResponse struct {
 		BaseResponse
-		Token int64 `json:"token"`
 	}
 
 	ContainerDestroyResponse struct {
@@ -55,7 +54,7 @@ func ResponseSend(w web.ResponseWriter, response Response) {
 	w.Write(answer)
 }
 
-func (response ContainerControlResponse) Write(w web.ResponseWriter) {
+func (response ClusterResponse) Write(w web.ResponseWriter) {
 	response.Status = "ok"
 	w.WriteHeader(http.StatusOK)
 	ResponseSend(w, response)
