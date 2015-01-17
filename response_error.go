@@ -7,10 +7,6 @@ import (
 )
 
 type (
-	ServerErrorResponse struct {
-		BaseResponse
-	}
-
 	CantAssignAnyHostResponse struct {
 		BaseResponse
 	}
@@ -27,10 +23,6 @@ type (
 		BaseResponse
 	}
 
-	ContainerControlErrorResponse struct {
-		BaseResponse
-	}
-
 	CantFindHostnameByContainerResponse struct {
 		BaseResponse
 	}
@@ -40,10 +32,6 @@ type (
 	}
 
 	HostNotFoundResponse struct {
-		BaseResponse
-	}
-
-	HeaverErrorResponse struct {
 		BaseResponse
 	}
 
@@ -111,12 +99,6 @@ func (response CantFindHostnameByContainerResponse) Write(w web.ResponseWriter) 
 	ResponseSend(w, response)
 }
 
-func (response HeaverErrorResponse) Write(w web.ResponseWriter) {
-	response.Status = "error"
-	w.WriteHeader(http.StatusConflict)
-	ResponseSend(w, response)
-}
-
 func (response HostNotFoundResponse) Write(w web.ResponseWriter) {
 	response.Status = "error"
 	response.Error = "Host not found"
@@ -156,15 +138,4 @@ func (response ContainerCreateErrorResponse) Write(w web.ResponseWriter) {
 	response.Status = "error"
 	w.WriteHeader(http.StatusInternalServerError)
 	ResponseSend(w, response)
-}
-
-func (response ContainerControlErrorResponse) Write(w web.ResponseWriter) {
-	response.Status = "error"
-	w.WriteHeader(http.StatusInternalServerError)
-	ResponseSend(w, response)
-}
-
-func (response ServerErrorResponse) Write(w web.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusInternalServerError)
 }
