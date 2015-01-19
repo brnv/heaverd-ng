@@ -131,7 +131,8 @@ func (request ContainerDestroyRequest) Execute() Response {
 		}
 	}
 
-	return ContainerDestroyErrorResponse{
+	return ContainerDestroyResponse{
 		BaseResponse: response.(ClusterResponse).BaseResponse,
+		Token:        response.(ClusterResponse).Token,
 	}
 }
