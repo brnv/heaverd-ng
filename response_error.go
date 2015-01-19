@@ -7,7 +7,7 @@ import (
 )
 
 type (
-	CantAssignAnyHostResponse struct {
+	NoSuitableHostFoundErrorResponse struct {
 		BaseResponse
 	}
 
@@ -113,7 +113,7 @@ func (response ContainerNotFoundResponse) Write(w web.ResponseWriter) {
 	ResponseSend(w, response)
 }
 
-func (response CantAssignAnyHostResponse) Write(w web.ResponseWriter) {
+func (response NoSuitableHostFoundErrorResponse) Write(w web.ResponseWriter) {
 	response.Status = "error"
 	response.Error = "No suitable host found"
 	w.WriteHeader(http.StatusNotFound)

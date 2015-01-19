@@ -33,6 +33,13 @@ func (request ContainerCreateRequest) Execute() Response {
 				},
 			}
 		}
+
+		return ContainerCreateErrorResponse{
+			BaseResponse: BaseResponse{
+				ResponseHost: request.RequestHost,
+				Error:        err.Error(),
+			},
+		}
 	}
 
 	payload, _ := json.Marshal(request)
@@ -45,10 +52,6 @@ func (request ContainerCreateRequest) Execute() Response {
 				Error:        err.Error(),
 			},
 		}
-	}
-
-	if err != nil {
-		return response
 	}
 
 	if response.(ClusterResponse).Error != "" {
@@ -68,7 +71,7 @@ func (request ContainerCreateRequest) Execute() Response {
 
 func (request ContainerCreateRequest) Validate() Response {
 	if request.RequestHost == "" {
-		return CantAssignAnyHostResponse{
+		return NoSuitableHostFoundErrorResponse{
 			BaseResponse: BaseResponse{
 				ResponseHost: Hostinfo.Hostname,
 			},
