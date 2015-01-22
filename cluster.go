@@ -76,6 +76,7 @@ func StoreRequestAsIntent(request ContainerCreateRequest) error {
 		Status: intentContainerStatus,
 		Image:  request.Image,
 		Key:    request.SshKey,
+		Ip:     request.Ip,
 	})
 	_, err := storage.Create("containers/"+request.ContainerName, string(intentContainer), storedKeyTtl)
 	if err != nil {
@@ -286,7 +287,9 @@ func createContainer(name string) (lxc.Container, error) {
 		return lxc.Container{}, err
 	}
 
-	newContainer, err := heaver.Create(container.Name, container.Image, container.Key)
+	newContainer, err := heaver.Create(
+		container.Name, container.Image, container.Key, container.Ip,
+	)
 	newContainer.Host = Hostinfo.Hostname
 	if err != nil {
 		return newContainer, err

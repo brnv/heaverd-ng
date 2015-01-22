@@ -35,20 +35,29 @@ type Image struct {
 func Create(containerName string,
 	image []string,
 	key string,
+	ipPredefined string,
 ) (lxc.Container, error) {
 	createArgs[2] = containerName
 
 	args := createArgs
+
 	for _, i := range image {
 		args = append(args, "-i")
 		args = append(args, i)
 	}
+
 	if key != "" {
 		args = append(args, "--raw-key")
 		args = append(args, key)
 	}
-	for _, n := range netInterfaceArgs {
-		args = append(args, n)
+
+	if ipPredefined != "" {
+		args = append(args, "--raw-net")
+		args = append(args, ipPredefined)
+	} else {
+		for _, n := range netInterfaceArgs {
+			args = append(args, n)
+		}
 	}
 
 	output, err := getHeaverOutput(args)

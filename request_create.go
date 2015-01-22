@@ -13,6 +13,7 @@ type ContainerCreateRequest struct {
 	Image    []string
 	SshKey   string
 	Token    int64
+	Ip       string
 }
 
 func (request ContainerCreateRequest) Execute() Response {
