@@ -29,7 +29,7 @@ const (
 
 var (
 	log            = logging.MustGetLogger("heaver")
-	loggingEnabled = false
+	loggingEnabled = true
 )
 
 type Image struct {
@@ -141,6 +141,7 @@ func Destroy(containerName string) error {
 }
 
 func ListContainers(host string) (map[string]lxc.Container, error) {
+	loggingEnabled = false
 	output, err := getHeaverOutput(listArgs)
 	if err != nil {
 		return nil, err
@@ -222,7 +223,7 @@ func getHeaverOutput(args []string) ([]byte, error) {
 		}
 		log.Info("CMD: %#v", cmdString)
 	}
-	loggingEnabled = false
+	loggingEnabled = true
 
 	var output bytes.Buffer
 	var stderr bytes.Buffer
