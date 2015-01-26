@@ -16,6 +16,8 @@ type ContainerCreateRequest struct {
 	Ip       string
 }
 
+const etcdErrCodeKeyExists = "105"
+
 func (request ContainerCreateRequest) Execute() Response {
 	request.Action = "create"
 	request.RequestHost = request.GetMostSuitableHost()
@@ -79,11 +81,14 @@ func (request ContainerCreateRequest) Validate() Response {
 		}
 	}
 
-	if request.Token > Cluster()[request.RequestHost].LastUpdateTimestamp {
-		return StaleDataResponse{
-			BaseResponse: BaseResponse{
-				ResponseHost: Hostinfo.Hostname,
-			},
+	cluster := Cluster()
+	for _, host := range cluster {
+		if request.Token > host.LastUpdateTimestamp {
+			return StaleDataResponse{
+				BaseResponse: BaseResponse{
+					ResponseHost: Hostinfo.Hostname,
+				},
+			}
 		}
 	}
 

@@ -15,10 +15,7 @@ type (
 	Context struct{}
 )
 
-const (
-	etcdErrCodeKeyExists = "105"
-	apiPrefix            = "/v2"
-)
+const apiPrefix = "/v2"
 
 var (
 	rootRouter  = web.New(Context{})
