@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/brnv/heaverd-ng/liblxc"
+	"github.com/op/go-logging"
 )
 
 var (
@@ -24,6 +25,11 @@ var (
 const (
 	StatusActive   = "active"
 	StatusInactive = "inactive"
+)
+
+var (
+	log            = logging.MustGetLogger("heaver")
+	loggingEnabled = false
 )
 
 type Image struct {
@@ -60,6 +66,7 @@ func Create(containerName string,
 		}
 	}
 
+	loggingEnabled = true
 	output, err := getHeaverOutput(args)
 
 	if err != nil {
@@ -207,6 +214,15 @@ func getHeaverOutput(args []string) ([]byte, error) {
 		Path: "/usr/bin/heaver",
 		Args: args,
 	}
+
+	if loggingEnabled {
+		cmdString := args[0]
+		for _, arg := range cmd.Args[1:] {
+			cmdString += " " + arg
+		}
+		log.Info("CMD: %#v", cmdString)
+	}
+	loggingEnabled = false
 
 	var output bytes.Buffer
 	var stderr bytes.Buffer
