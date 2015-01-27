@@ -46,6 +46,10 @@ type (
 		BaseResponse
 		Token int64 `json:"token"`
 	}
+
+	ContainerRecreateResponse struct {
+		BaseResponse
+	}
 )
 
 func ResponseSend(w web.ResponseWriter, response Response) {
@@ -81,6 +85,12 @@ func (response ContainerDestroyResponse) Write(w web.ResponseWriter) {
 func (response ContainerCreateResponse) Write(w web.ResponseWriter) {
 	response.Status = "ok"
 	w.WriteHeader(http.StatusCreated)
+	ResponseSend(w, response)
+}
+
+func (response ContainerRecreateResponse) Write(w web.ResponseWriter) {
+	response.Status = "ok"
+	w.WriteHeader(http.StatusOK)
 	ResponseSend(w, response)
 }
 

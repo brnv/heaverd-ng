@@ -20,6 +20,7 @@ var (
 	stopArgs         = []string{"heaver", "-Tn"}
 	destroyArgs      = []string{"heaver", "-Dn"}
 	pushArg          = []string{"heaver", "-Pn"}
+	recreateArgs     = []string{"heaver", "-Rn", "", "--save-net-config"}
 )
 
 const (
@@ -104,6 +105,15 @@ func Create(containerName string,
 	}
 
 	return container, nil
+}
+
+func Recreate(containerName string) error {
+	args := recreateArgs
+	args[2] = containerName
+
+	_, err := getHeaverOutput(args)
+
+	return err
 }
 
 func Push(containerName string, image string) error {

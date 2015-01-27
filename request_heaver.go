@@ -14,6 +14,10 @@ type (
 	ContainerDestroyRequest struct {
 		BaseRequest
 	}
+
+	ContainerRecreateRequest struct {
+		BaseRequest
+	}
 )
 
 func (request ContainerStartRequest) Execute() Response {
@@ -134,5 +138,43 @@ func (request ContainerDestroyRequest) Execute() Response {
 	return ContainerDestroyResponse{
 		BaseResponse: response.(ClusterResponse).BaseResponse,
 		Token:        response.(ClusterResponse).Token,
+	}
+}
+
+func (request ContainerRecreateRequest) Execute() Response {
+	request.Action = "recreate"
+
+	if request.RequestHost == "" {
+		request.RequestHost = request.FindHostname()
+	}
+
+	errorResponse := request.Validate()
+	if errorResponse != nil {
+		return errorResponse
+	}
+
+	payload, _ := json.Marshal(request)
+	response, err := request.Send(request.RequestHost, payload)
+
+	if err != nil {
+		return ContainerRecreateErrorResponse{
+			BaseResponse: BaseResponse{
+				ResponseHost: request.RequestHost,
+				Error:        err.Error(),
+			},
+		}
+	}
+
+	if response.(ClusterResponse).Error != "" {
+		return ContainerRecreateErrorResponse{
+			BaseResponse: BaseResponse{
+				ResponseHost: request.RequestHost,
+				Error:        response.(ClusterResponse).Error,
+			},
+		}
+	}
+
+	return ContainerRecreateResponse{
+		BaseResponse: response.(ClusterResponse).BaseResponse,
 	}
 }

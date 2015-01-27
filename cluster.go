@@ -160,6 +160,24 @@ func listenForMessages(port string) {
 
 			socket.Write(response)
 
+		case "recreate":
+			err := heaver.Recreate(
+				request["ContainerName"].(string),
+			)
+
+			if err != nil {
+				errorMessage = err.Error()
+			}
+
+			response, _ := json.Marshal(ClusterResponse{
+				BaseResponse: BaseResponse{
+					ResponseHost: Hostinfo.Hostname,
+					Error:        errorMessage,
+				},
+			})
+
+			socket.Write(response)
+
 		case "start":
 			err := heaver.Start(
 				request["ContainerName"].(string),

@@ -25,6 +25,10 @@ var (
 	clusterPort string
 )
 
+const (
+	requestRecreateDoc = "Recreate container saving net config"
+)
+
 func WebapiRun(params map[string]interface{}) {
 	webPort = params["webPort"].(string)
 	staticDir = params["staticDir"].(string)
@@ -45,19 +49,21 @@ func WebapiRun(params map[string]interface{}) {
 		"Create container :cid inside :poolid pool using balancer").
 		Post("/h/:hid/:cid/start", handleContainerStart, "Start container").
 		Post("/c/:cid/start", handleContainerStart, "Start container").
-		Post("/c/:cid/push", handleContainerPush, "Push container's rootfs into image").
 		Post("/h/:hid/:cid/push", handleContainerPush, "Push container's rootfs into image").
+		Post("/c/:cid/push", handleContainerPush, "Push container's rootfs into image").
 		Post("/h/:hid/:cid/stop", handleContainerStop, "Terminate container").
 		Post("/c/:cid/stop", handleContainerStop, "Terminate container").
 		Delete("/h/:hid/:cid", handleContainerDestroy, "Destroy container").
 		Delete("/c/:cid", handleContainerDestroy, "Destroy container").
-		Post("/h/:hid/:cid", handleHostContainerCreate, "Create container :cid on host :hid (tbd)").
-		Put("/h/:hid/:cid", handleHostContainerUpdate, "Update container :cid settings (tbd)").
-		Get("/h/:hid/:cid", handleContainerInfo, "Container :cid infromation (tbd)").
-		Get("/h/:hid/:cid/ping", handleContainerPing, "Ping container (tbd)").
-		Post("/h/:hid", handleHostOperation, "Host operation (tdb)").
-		Get("/h/:hid", handleHostContainersList, "Containers list on host :hid (tbd)").
-		Head("/c/:cid", handleHostByContainer, "Get host by conatiner name (tbd)")
+		Post("/h/:hid/:cid/recreate", handleContainerRecreate, requestRecreateDoc).
+		Post("/c/:cid/recreate", handleContainerRecreate, requestRecreateDoc)
+	//Post("/h/:hid/:cid", handleHostContainerCreate, "Create container :cid on host :hid (tbd)").
+	//Put("/h/:hid/:cid", handleHostContainerUpdate, "Update container :cid settings (tbd)").
+	//Get("/h/:hid/:cid", handleContainerInfo, "Container :cid infromation (tbd)").
+	//Get("/h/:hid/:cid/ping", handleContainerPing, "Ping container (tbd)").
+	//Post("/h/:hid", handleHostOperation, "Host operation (tdb)").
+	//Get("/h/:hid", handleHostContainersList, "Containers list on host :hid (tbd)").
+	//Head("/c/:cid", handleHostByContainer, "Get host by conatiner name (tbd)")
 
 	log.Info("web api is on :%s", webPort)
 	log.Fatal(http.ListenAndServe(":"+webPort, rootRouter))
@@ -160,6 +166,14 @@ func handleContainerCreate(w web.ResponseWriter, r *web.Request) {
 
 	response := request.Execute()
 
+	response.Write(w)
+}
+
+func handleContainerRecreate(w web.ResponseWriter, r *web.Request) {
+	request := ContainerRecreateRequest{}
+	request.ContainerName = r.PathParams["cid"]
+	request.RequestHost = r.PathParams["hid"]
+	response := request.Execute()
 	response.Write(w)
 }
 

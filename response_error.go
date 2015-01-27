@@ -19,6 +19,10 @@ type (
 		BaseResponse
 	}
 
+	ContainerRecreateErrorResponse struct {
+		BaseResponse
+	}
+
 	ContainerCreateErrorResponse struct {
 		BaseResponse
 	}
@@ -131,6 +135,12 @@ func (response NotUniqueNameResponse) Write(w web.ResponseWriter) {
 	response.Status = "error"
 	response.Error = "Not unique name"
 	w.WriteHeader(http.StatusConflict)
+	ResponseSend(w, response)
+}
+
+func (response ContainerRecreateErrorResponse) Write(w web.ResponseWriter) {
+	response.Status = "error"
+	w.WriteHeader(http.StatusInternalServerError)
 	ResponseSend(w, response)
 }
 
