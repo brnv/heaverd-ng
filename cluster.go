@@ -17,13 +17,12 @@ var (
 	storage               = &etcd.Client{}
 	Hostinfo              = &libscore.Hostinfo{}
 	intentContainerStatus = "pending"
-	containerLogin        = "root"
-	containerPassword     = "123123"
 	clusterPools          []string
 	storedKeyTtl          uint64
 )
 
 func ClusterRun(params map[string]interface{}) {
+	storage.SetConsistency(etcd.STRONG_CONSISTENCY)
 	Hostinfo.Pools = params["clusterPools"].([]string)
 	storage = getEtcdClient(params["etcdPort"].(string))
 	storedKeyTtl = uint64(params["etcdKeyTtl"].(int64))
