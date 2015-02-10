@@ -282,14 +282,33 @@ func answer(code int, text string, err string, time int64) []byte {
 	return answer
 }
 
+func getIntent(containerName string) (*etcd.Response, error) {
+	var err error
+	var intent *etcd.Response
+
+	// workaround to prevent 'not unique name' and 'key not found' errors
+	var i uint64
+	for i = 0; i < storedKeyTtl; i++ {
+		intent, err = storage.Get("containers/"+containerName, false, false)
+
+		if err == nil {
+			return intent, nil
+		}
+
+		time.Sleep(time.Second)
+	}
+
+	return nil, err
+}
+
 func createContainer(name string) (lxc.Container, error) {
-	rawContainer, err := storage.Get("containers/"+name, false, false)
+	intent, err := getIntent(name)
 	if err != nil {
 		return lxc.Container{}, err
 	}
 
 	container := lxc.Container{}
-	err = json.Unmarshal([]byte(rawContainer.Node.Value), &container)
+	err = json.Unmarshal([]byte(intent.Node.Value), &container)
 	if err != nil {
 		return lxc.Container{}, err
 	}
