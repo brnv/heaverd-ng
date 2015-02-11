@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"sync"
 
 	"github.com/brnv/heaverd-ng/libheaver"
 	"github.com/brnv/heaverd-ng/liblxc"
@@ -34,7 +35,7 @@ func ClusterRun(params map[string]interface{}) {
 		log.Fatal(err.Error())
 	}
 
-	storeContainers(Hostinfo.Containers)
+	storeContainers(Hostinfo.Containers, false)
 
 	for {
 		err = hostinfoUpdate()
@@ -47,25 +48,33 @@ func ClusterRun(params map[string]interface{}) {
 	}
 }
 
-func storeContainers(containers map[string]lxc.Container) {
-	for _, c := range containers {
-		container, _ := json.Marshal(c)
-		_, err := storage.Create("containers/"+c.Name, string(container), storedKeyTtl)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-}
+func storeContainers(containers map[string]lxc.Container, update bool) {
+	var err error
+	wg := &sync.WaitGroup{}
 
-func updateContainers(containers map[string]lxc.Container) error {
 	for _, c := range containers {
-		container, _ := json.Marshal(c)
-		_, err := storage.Set("containers/"+c.Name, string(container), storedKeyTtl)
-		if err != nil {
-			return err
-		}
+		// workaround for getting some kind of bulk-insert
+		// without goroutine this may take a while
+		go func() {
+			wg.Add(1)
+
+			container, _ := json.Marshal(c)
+
+			if update {
+				_, err = storage.Set("containers/"+c.Name, string(container), storedKeyTtl)
+			} else {
+				_, err = storage.Create("containers/"+c.Name, string(container), storedKeyTtl)
+			}
+
+			if err != nil {
+				log.Notice(err.Error())
+			}
+
+			wg.Done()
+		}()
 	}
-	return nil
+
+	wg.Wait()
 }
 
 func StoreRequestAsIntent(request ContainerCreateRequest) error {
@@ -345,10 +354,7 @@ func hostinfoUpdate() error {
 		return err
 	}
 
-	err = updateContainers(containers)
-	if err != nil {
-		return err
-	}
+	storeContainers(containers, true)
 
 	err = Hostinfo.Refresh()
 	if err != nil {
